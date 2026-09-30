@@ -5,3 +5,6 @@ export * from './pairing.js';
 export { GatewaySessions,SESSION_COOKIE,type BrowserSession } from './sessions.js';
 export { gatewayBrowserRouter } from './browser.js';
 export { createGatewayApp,type GatewayEdgeOptions } from './app.js';
+export { createGatewayRuntime } from './app.js';
+export { GatewayEdgeGuard } from './edge.js';
+export { GatewayRelay } from './relay.js';

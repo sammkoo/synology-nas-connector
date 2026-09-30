@@ -1,34 +1,25 @@
 import express from 'express';
-import { isIP } from 'node:net';
 import { z } from 'zod';
 import { DevicePairing } from './pairing.js';
 import { GatewayOAuthProvider } from './oauth.js';
 import { gatewayOAuthRouter } from './router.js';
 import { gatewayBrowserRouter } from './browser.js';
+import { GatewayEdgeGuard,type GatewayEdgeOptions } from './edge.js';
+import { GatewayRelay } from './relay.js';
+import { gatewayMcpRouter } from './mcp.js';
+export type { GatewayEdgeOptions } from './edge.js';
 
-export type GatewayEdgeOptions={trustedProxyAddresses?:readonly string[]};
 /** Gateway control-plane app. The MCP relay must be attached before deployment. */
-export function createGatewayApp(oauth:GatewayOAuthProvider,edge:GatewayEdgeOptions={}) {
+export function createGatewayApp(oauth:GatewayOAuthProvider,edge:GatewayEdgeOptions={},relay?:GatewayRelay) {
   const app=express(),pairing=new DevicePairing(oauth),issuer=new URL(oauth.issuer);
-  const trusted=edge.trustedProxyAddresses??[];
-  if(trusted.some(ip=>!isIP(ip)))throw new Error('Proxy addresses must be exact IP addresses');
+  if(relay&&(relay.oauth!==oauth||new URL(oauth.resource).origin!==issuer.origin||new URL(oauth.resource).pathname!=='/mcp'))throw new Error('Relay requires the same provider and issuer /mcp resource');
+  const guard=relay?.edgeGuard??new GatewayEdgeGuard(oauth,edge);
   app.disable('x-powered-by');
-  const windows=new Map<string,{at:number;count:number}>();let at=oauth.store.now(),total=0;
   app.use((req,res,next)=>{
     res.set({'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Strict-Transport-Security':'max-age=31536000'});
-    const peer=req.socket.remoteAddress??'';
-    const proxy=trusted.includes(peer);
-    if(req.headers.host!==issuer.host||(!('encrypted' in req.socket&&req.socket.encrypted)&&!(proxy&&req.headers['x-forwarded-proto']==='https'))){res.status(403).json({error:'secure_transport_required'});return;}
-    // A trusted proxy must overwrite (not append) both headers. Never trust a chain.
-    const forwarded=req.headers['x-forwarded-for'];
-    if(proxy&&(typeof forwarded!=='string'||!isIP(forwarded))){res.status(403).json({error:'invalid_proxy_provenance'});return;}
-    const ip=proxy?forwarded as string:peer,now=oauth.store.now();
-    if(now-at>=60_000){at=now;total=0;for(const [key,entry] of windows)if(now-entry.at>=60_000)windows.delete(key);}
-    let entry=windows.get(ip);
-    if(!entry||now-entry.at>=60_000){if(!entry&&windows.size>=10000){res.status(429).json({error:'busy'});return;}entry={at:now,count:0};windows.set(ip,entry);}
-    if(++total>600||++entry.count>120){res.set('Retry-After','60').status(429).json({error:'rate_limited'});return;}next();
+    const rejected=guard.check(req);if(rejected){if(rejected.status===429)res.set('Retry-After','60');res.status(rejected.status).json({error:rejected.error});return;}next();
   });
-  app.get('/health',(_req,res)=>{res.json({status:'control-plane-ready',relay:'not-attached'});});
+  app.get('/health',(_req,res)=>{res.json(relay?.attachedToListener?{status:'ready',relay:'attached'}:{status:'control-plane-ready',relay:'not-attached'});});
   app.use('/connect',gatewayBrowserRouter(oauth,pairing));
   const agent=express.Router();
   agent.use((req,res,next)=>{
@@ -46,7 +37,11 @@ export function createGatewayApp(oauth:GatewayOAuthProvider,edge:GatewayEdgeOpti
   });
   agent.use((e:{status?:number},_req:express.Request,res:express.Response,_next:express.NextFunction)=>{res.status(e.status===413?413:400).json({error:'pairing_request_failed'});});
   app.use('/agent/pair',agent);
+  if(relay)app.use(gatewayMcpRouter(oauth,relay));
   app.use(gatewayOAuthRouter(oauth));
   app.use((_req,res)=>{res.status(404).json({error:'not_found'});});
   return app;
+}
+export function createGatewayRuntime(oauth:GatewayOAuthProvider,edge:GatewayEdgeOptions={}) {
+  const relay=new GatewayRelay(oauth,new GatewayEdgeGuard(oauth,edge));return {app:createGatewayApp(oauth,edge,relay),relay};
 }

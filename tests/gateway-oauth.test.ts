@@ -120,6 +120,12 @@ test('pending requests and authorization codes expire; denial preserves issuer/s
   const code=new URL(provider.approveAuthorization(authorization(),'owner',device,['docs'])).searchParams.get('code')!;
   now+=61_000;await assert.rejects(provider.exchangeAuthorizationCode(client,code,verifier,callback,new URL(resource)));
 });
+test('a DCR client remains stable across expired grants and later reauthorization',async()=>{
+  const original=await tokens();now+=91*86400_000;
+  await assert.rejects(provider.verifyAccessToken(original.access_token));
+  const same=await provider.clientsStore.getClient(client.client_id);assert.equal(same?.client_id,client.client_id);
+  const renewed=await tokens();await provider.verifyAccessToken(renewed.access_token);
+});
 test('opaque grant verifier rejects issuer/audience changes and foreign credentials',async()=>{
   const grant=await tokens();
   const changed=new GatewayOAuthProvider(store,{issuer:'https://new-issuer.example/',resource,redirectUris:[callback]});

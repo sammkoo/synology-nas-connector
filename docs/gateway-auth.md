@@ -1,6 +1,6 @@
 # Gateway authorization and device pairing implementation
 
-`packages/gateway` implements durable OAuth, device pairing, first-party browser sessions and an HTML consent interface. It is not a deployed gateway or a completed ChatGPT account connection. The outbound relay agent, approved HTTPS hosting, DSM integration and a real ChatGPT client test remain required. No gateway endpoints are enabled by the NAS CLI.
+`packages/gateway` implements durable OAuth, device pairing, first-party browser sessions and an HTML consent interface. It is not a deployed gateway or a completed ChatGPT account connection. The outbound relay and protected MCP resource are implemented as separate libraries; deployment tooling, approved HTTPS hosting, DSM integration and a real ChatGPT client test remain required. No gateway endpoints are enabled by the NAS CLI.
 
 ## OAuth protocol
 
@@ -10,11 +10,11 @@ Callbacks are an exact HTTPS deployment allowlist; copy the actual callback from
 
 Tokens are random opaque credentials, checked against gateway state on every request. They are bound to issuer, resource, OAuth client, stable first-party subject, paired device and selected folder IDs. They are unrelated to OpenAI ID/inference tokens. Database keys use an HMAC digest under a separate private gateway key. Raw authorization codes, access credentials, refresh credentials and device/browser pairing secrets are not stored in the database.
 
-Codes expire after one minute and are atomically consumed with PKCE verification. Access credentials default to five minutes. Refresh credentials rotate on every exchange; replay of a used refresh credential revokes its grant, including sibling access/refresh credentials. Revocation checks occur on every request. Failed requests from a different client or resource cannot revoke a legitimate grant.
+Dynamic client registrations remain valid for the connection lifetime rather than expiring after a fixed number of days; the registration count is bounded. An operator client retirement policy remains deployment work. Codes expire after one minute and are atomically consumed with PKCE verification. Access credentials default to five minutes. Refresh credentials rotate on every exchange; replay of a used refresh credential revokes its grant, including sibling access/refresh credentials. Revocation checks occur on every request. Failed requests from a different client or resource cannot revoke a legitimate grant.
 
 Folder removal immediately narrows existing grants. Per-folder policy versions prevent re-adding a folder from restoring an old grant's access. A fresh consent is required for the newly enabled folder. Device revocation invalidates active access and refresh credentials.
 
-`authenticator()` returns the verified device ID as well as subject/scopes/roots. A file server must bind to that device explicitly; the HTTP server rejects device-scoped identities when no expected device is configured or when it differs. A multi-device gateway must select its relay channel from the verified token's device ID and recheck the grant after an in-flight response. Never attach one global file provider to all accounts.
+`authenticator()` returns the verified device ID as well as subject/scopes/roots. A file server must bind to that device explicitly; the HTTP server rejects device-scoped identities when no expected device is configured or when it differs. The implemented multi-device gateway selects its relay channel from the verified token's device ID and rechecks the grant before and after an in-flight response. Never attach one global file provider to all accounts. See [outbound relay](relay.md) for its trust model, cancellation and isolation evidence.
 
 ## NAS ownership proof and browser sign-in
 
@@ -28,7 +28,7 @@ This supplies a NAS ownership-based first-party sign-in path. It does not claim 
 
 ## Browser and control-plane routes
 
-`createGatewayApp()` mounts OAuth discovery/protocol, `/agent/pair/{begin,poll,approve}`, and `/connect/` browser routes. Its health response explicitly reports `relay: not-attached`. It does not expose a functioning MCP data resource, does not have a deployment CLI and must not be deployed as a finished connector until the relay is attached.
+`createGatewayApp()` mounts OAuth discovery/protocol, `/agent/pair/{begin,poll,approve}`, and `/connect/` browser routes. Its health response explicitly reports `relay: not-attached`. This control-plane-only factory does not expose an MCP data resource. `createGatewayRuntime()` additionally creates the protected `/mcp` router and outbound WSS relay; the caller must attach that relay to its secure listener. Neither factory supplies a deployment CLI or a finished DSM connection. See [relay wiring and remaining gates](relay.md).
 
 The browser flow is: enter the NAS user code, compare the six-digit number, confirm in authenticated DSM, finish first-party sign-in, and explicitly select folders for the pending OAuth request. The server accepts no submitted subject/account identity. Authorization handles are bound to the browser session. A separate session cannot approve a copied handle. Folder boxes start unchecked. Client-provided names and NAS labels are escaped and identified as supplied metadata; the configured resource is also shown.
 
@@ -44,7 +44,7 @@ Gateway state uses Node's `node:sqlite`, with synchronous atomic `BEGIN IMMEDIAT
 
 Keep the 32-byte HMAC key in a separate private secret store and use the same key after restart. Key replacement invalidates credential lookups; it is not a seamless rotation protocol. Back up the private database and key consistently, protect backups as credentials and document recovery. A single durable database is supported; a horizontally distributed database/session design is a separate deployment requirement.
 
-The library bounds dynamic clients, pending authorizations, pairing requests and browser sessions. The app supplies the Host/TLS/proxy, body-size, rate and secure-session controls described above. Concurrency/socket hardening, credential-free operational logging and production deployment remain required. The SDK router includes protocol endpoint rate limits and additional 16 KiB parsing bounds. Prune expired records periodically.
+The library bounds dynamic clients, pending authorizations, pairing requests and browser sessions. The app supplies the Host/TLS/proxy, body-size, rate and secure-session controls described above. MCP/relay concurrency and operation deadlines are implemented; listener/socket hardening, credential-free operational logging and production deployment remain required. The SDK router includes protocol endpoint rate limits and additional 16 KiB parsing bounds. Prune expired records periodically.
 
 ## Evidence
 
@@ -52,4 +52,6 @@ The test suite exercises HTTP metadata/DCR/PKCE/refresh/revocation, account/devi
 
 An isolated local browser fixture exercised native HTML forms from code entry to number comparison, signed simulated-NAS approval and the folder-selection screen. Its loopback shim simulates TLS/proxy provenance and uses a separate non-Secure fixture cookie. After correcting Referrer-Policy, form requests showed the real local Origin and null Origin was no longer accepted even in the fixture. This is visual/interaction evidence, not a public HTTPS, real DSM, or ChatGPT integration test.
 
-Verified references (2026-09-30): [OpenAI MCP authentication](https://developers.openai.com/plugins/build/auth), [MCP authorization specification](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization), [OpenAI website identity](https://developers.openai.com/siwc/website), [Node SQLite API](https://nodejs.org/api/sqlite.html).
+Real TLS relay tests additionally exercise the data resource, wire-level OAuth `securitySchemes` and runtime authentication challenges. The public registration now keeps its client valid across long-lived connections; a 91-day regression verifies reauthorization without `invalid_client`.
+
+Verified references (MCP authentication rechecked 2026-10-01; other references 2026-09-30): [OpenAI MCP authentication](https://developers.openai.com/plugins/build/auth), [MCP authorization specification](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization), [OpenAI website identity](https://developers.openai.com/siwc/website), [Node SQLite API](https://nodejs.org/api/sqlite.html).

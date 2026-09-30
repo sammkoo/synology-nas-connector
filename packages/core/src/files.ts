@@ -145,17 +145,20 @@ export class NasFiles {
     }
     return {entries, truncated: truncated || budget.remaining <= 0 || Date.now() >= budget.deadline, skippedDirectories};
   }
-  async metadata(rootId: string, relative: string) {
+  async metadata(rootId: string, relative: string, signal?: AbortSignal) {
+    if(signal?.aborted)throw new NasError('CANCELLED');
     // Determine type without following links; retry as directory only after a safe file open.
     const inspect = async (h: FileHandle) => {
       const s = await h.stat();
+      if(signal?.aborted)throw new NasError('CANCELLED');
       return {rootId, path: relative, type: s.isDirectory() ? 'directory' : 'file', size: s.size,
         modifiedAt: s.mtime.toISOString(), readableText: s.isFile() && textExtensions.has(path.extname(relative).toLowerCase())};
     };
     try { return await this.withHandle(rootId, relative, false, inspect); }
-    catch { return this.withHandle(rootId, relative, true, inspect); }
+    catch { if(signal?.aborted)throw new NasError('CANCELLED');return this.withHandle(rootId, relative, true, inspect); }
   }
-  async readText(rootId: string, relative: string, startLine = 1, maxLines = 200) {
+  async readText(rootId: string, relative: string, startLine = 1, maxLines = 200, signal?: AbortSignal) {
+    if(signal?.aborted)throw new NasError('CANCELLED');
     if (!Number.isInteger(startLine) || startLine < 1 || !Number.isInteger(maxLines) || maxLines < 1 || maxLines > 500)
       throw new NasError('INVALID_RANGE');
     if (!textExtensions.has(path.extname(relative).toLowerCase())) throw new NasError('UNSUPPORTED_TEXT_FORMAT');
@@ -166,6 +169,7 @@ export class NasFiles {
       const buf = Buffer.alloc(this.config.limits.maxReadBytes + 1);
       let count = 0;
       while (count < buf.length) {
+        if(signal?.aborted)throw new NasError('CANCELLED');
         const {bytesRead} = await h.read(buf, count, buf.length - count, count);
         if (!bytesRead) break;
         count += bytesRead;
@@ -176,6 +180,7 @@ export class NasFiles {
       catch { throw new NasError('INVALID_UTF8'); }
       if (/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(text)) throw new NasError('BINARY_CONTENT');
       const lines = text.split(/\r?\n/);
+      if(signal?.aborted)throw new NasError('CANCELLED');
       return {rootId, path: relative, text: lines.slice(startLine - 1, startLine - 1 + maxLines).join('\n'),
         startLine, totalLines: lines.length, truncated: startLine - 1 + maxLines < lines.length,
         trust: 'untrusted-document-content'};

@@ -4,9 +4,9 @@ Independent, MIT-licensed **v0.1 developer preview**. A read-only MCP server for
 
 **Implemented:** folder listing, filename search, metadata, bounded UTF-8 document reads; MCP stdio and stateless Streamable HTTP; bearer-token development authentication; DSM package lifecycle. Build 0002 adds an authenticated management bridge, graphical share selection and live policy revocation, pending real DSM CGI validation.
 
-**Planned:** production MCP OAuth, account pairing, Sign in with ChatGPT, public plugin distribution and an optional outbound relay. These features are visibly disabled. A `.spk` build is not proof of installation compatibility; real DSM testing remains a release gate.
+**Remaining product gates:** DSM pairing controls, gateway deployment, real ChatGPT linking, Sign in with ChatGPT and public distribution. These features are disabled in the NAS UI. A `.spk` build is not proof of installation compatibility; real DSM testing remains a release gate.
 
-Development now includes [durable gateway OAuth, NAS ownership pairing and browser consent](docs/gateway-auth.md), tested separately from the shipped NAS service. The control-plane app has first-party sessions, a folder consent screen and disconnection controls. Relay transport, DSM pairing integration, HTTPS deployment and real ChatGPT linking remain under development.
+Development now includes [durable gateway OAuth, NAS ownership pairing and browser consent](docs/gateway-auth.md), plus an [outbound WSS relay and protected MCP resource](docs/relay.md). These components are tested through real local TLS, separately from the shipped NAS service. The gateway browser has first-party sessions, a folder consent screen and disconnection controls. DSM pairing integration, deployment tooling, public HTTPS hosting and real ChatGPT linking remain required.
 
 ## Quick start
 
@@ -80,7 +80,7 @@ npm run spk
 npm run test:spk
 ```
 
-Output: `artifacts/SynologyNASConnector-0.1.0-0003-noarch.spk` and its SHA-256 checksum. See [DSM management preview](docs/dsm-management.md) for the setup flow and device-validation limits. Build 0003 improves checkbox/select layout and adds fail-closed device binding at the file server. Gateway modules remain separate from the NAS bundle. The [original installation guide](docs/installation.md) also documents manual/local diagnostics.
+Output: `artifacts/SynologyNASConnector-0.1.0-0004-noarch.spk` and its SHA-256 checksum. See [DSM management preview](docs/dsm-management.md) for the setup flow and device-validation limits. Build 0004 shares the read-only operation definitions with the relay and preserves the OAuth tool catalog on the wire. Gateway and relay modules remain separate from the NAS bundle; installing this package does not start an outbound connection. The [original installation guide](docs/installation.md) also documents manual/local diagnostics.
 
 ## Project layout
 
@@ -89,6 +89,7 @@ packages/core/      filesystem policy, limits, config; no DSM or MCP dependency
 packages/auth/      local-token authentication and future OAuth adapter contract
 packages/management/ signed bridge, share catalog and private configuration service
 packages/gateway/   OAuth, signed pairing, first-party sessions and browser consent
+packages/relay/     persistent NAS identity, outbound WSS agent and bounded protocol
 apps/server/        MCP tool definitions, HTTP transport, stdio CLI
 apps/dsm-ui/        static dashboard served locally and packaged for DSM
 apps/dsm-bridge/    authenticated DSM CGI bridge; no DSM credentials forwarded

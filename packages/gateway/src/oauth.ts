@@ -10,7 +10,7 @@ import { GatewayStore } from './store.js';
 
 const fresh=()=>randomBytes(32).toString('base64url');
 const DAY=86400_000;
-type Device={subject:string;label:string;rootIds:string[];rootVersions:Record<string,number>;revision:number;revoked:boolean};
+type Device={subject:string;label:string;rootIds:string[];rootLabels?:Record<string,string>;rootVersions:Record<string,number>;revision:number;revoked:boolean};
 type Pending={issuer:string;clientId:string;redirectUri:string;resource:string;challenge:string;state?:string;scopes:string[]};
 type Grant={issuer:string;subject:string;deviceId:string;rootIds:string[];rootVersions:Record<string,number>;clientId:string;resource:string;scopes:string[];expires:number;revoked:boolean};
 type Code=Pending&{grantId:string};
@@ -50,7 +50,9 @@ export class GatewayOAuthProvider implements OAuthServerProvider {
     if(client.client_name&&client.client_name.length>100)throw new InvalidClientMetadataError('Client name is too long');
     const record:OAuthClientInformationFull={redirect_uris:client.redirect_uris,...(client.client_name?{client_name:client.client_name}:{}),client_id:randomUUID(),client_id_issued_at:Math.floor(this.store.now()/1000),
       token_endpoint_auth_method:'none',grant_types:['authorization_code','refresh_token'],response_types:['code'],scope:NAS_READ_SCOPE};
-    this.store.put('client',record.client_id,record,this.store.now()+90*DAY);return record;
+    // Keep the DCR client stable for the connection lifetime; tokens have their
+    // own short expirations. Registration capacity remains explicitly bounded.
+    this.store.put('client',record.client_id,record,Number.MAX_SAFE_INTEGER);return record;
   }
   private requireClient(client:OAuthClientInformationFull){
     const registered=this.store.get<OAuthClientInformationFull>('client',client.client_id);
@@ -70,7 +72,13 @@ export class GatewayOAuthProvider implements OAuthServerProvider {
   }
   devicesFor(subject:string) {
     return this.store.list<Device>('device',10000).filter(row=>row.data.subject===subject&&!row.data.revoked)
-      .map(row=>({id:row.id,label:row.data.label,rootIds:[...row.data.rootIds]}));
+      .map(row=>({id:row.id,label:row.data.label,rootIds:[...row.data.rootIds],roots:row.data.rootIds.map(id=>({id,label:row.data.rootLabels&&Object.hasOwn(row.data.rootLabels,id)?row.data.rootLabels[id]!:id}))}));
+  }
+  setDeviceManifest(deviceId:string,subject:string,roots:{id:string;label:string}[]) {
+    if(!this.validRoots(roots.map(r=>r.id))||roots.some(r=>!r.label||r.label.length>100))throw new InvalidRequestError('Invalid folder manifest');
+    this.setDeviceRoots(deviceId,subject,roots.map(r=>r.id));
+    const device=this.store.get<Device>('device',deviceId)!;
+    this.store.put('device',deviceId,{...device,rootLabels:Object.fromEntries(roots.map(r=>[r.id,r.label]))},this.store.now()+3650*DAY);
   }
   setDeviceRoots(deviceId:string,subject:string,rootIds:string[]) {
     const device=this.store.get<Device>('device',deviceId);

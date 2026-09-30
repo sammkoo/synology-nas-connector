@@ -1,8 +1,17 @@
 {
-  "name": "synology-nas-connector", "version": "0.1.0", "private": true,
+  "name": "synology-nas-connector",
+  "version": "0.1.0",
+  "private": true,
   "description": "Read-only Synology NAS MCP connector for ChatGPT and local MCP clients",
-  "license": "MIT", "type": "module", "engines": {"node": ">=22 <25"},
-  "workspaces": ["packages/*", "apps/*"],
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22 <25"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
     "build": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit",
@@ -15,6 +24,19 @@
     "spk": "python3 scripts/build-spk.py",
     "test:spk": "python3 scripts/test-spk.py"
   },
-  "dependencies": {"@modelcontextprotocol/sdk": "1.31.0", "express": "^5.1.0", "zod": "^3.25.76"},
-  "devDependencies": {"@types/express": "^5.0.3", "@types/node": "^22.18.0", "esbuild": "^0.25.10", "tsx": "^4.20.5", "typescript": "^5.9.2"}
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.31.0",
+    "express": "^5.1.0",
+    "ws": "8.22.0",
+    "zod": "^3.25.76",
+    "zod-to-json-schema": "3.25.2"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^22.18.0",
+    "@types/ws": "8.18.2",
+    "esbuild": "^0.25.10",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  }
 }
