@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+umask 077
+PKG_NAME="${SYNOPKG_PKGNAME:-SynologyNASConnector}"
+PKG_TARGET="${SYNOPKG_PKGDEST:-/var/packages/$PKG_NAME/target}"
+PKG_VAR="${SYNOPKG_PKGVAR:-/var/packages/$PKG_NAME/var}"
+. "$PKG_TARGET/bin/node-runtime"
+find_node
+mkdir -p "$PKG_VAR"
+# Upgrade preserves existing config and token; partial state requires explicit repair.
+if [ ! -e "$PKG_VAR/config.json" ] && [ ! -e "$PKG_VAR/token" ]; then
+  "$NODE" "$PKG_TARGET/bin/init-config.mjs" "$PKG_VAR"
+fi
+test -f "$PKG_VAR/config.json" && test -f "$PKG_VAR/token"

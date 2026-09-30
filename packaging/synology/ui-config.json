@@ -1,0 +1,8 @@
+{
+  ".url": {
+    "org.nasconnector.dashboard": {
+      "type": "url", "title": "NAS Connector", "desc": "Read-only NAS MCP connector",
+      "icon": "images/app_{0}.png", "url": "3rdparty/SynologyNASConnector/index.html", "allUsers": false
+    }
+  }
+}

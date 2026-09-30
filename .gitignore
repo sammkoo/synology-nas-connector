@@ -1,0 +1,10 @@
+node_modules/
+dist/
+artifacts/
+.local/
+*.spk
+*.log
+.env*
+!.env.example
+coverage/
+.DS_Store

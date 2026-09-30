@@ -1,0 +1,11 @@
+# Sourced by package scripts. No PATH-dependent runtime and no downloaded binaries.
+find_node() {
+  for candidate in /var/packages/Node.js_v22/target/usr/local/bin/node /var/packages/Node.js_v22/target/bin/node; do
+    if [ -x "$candidate" ] && "$candidate" -e 'process.exit(Number(process.versions.node.split(".")[0]) === 22 ? 0 : 1)'; then
+      NODE="$candidate"
+      return 0
+    fi
+  done
+  echo 'Node.js v22 package runtime not found. Check Package Center dependency.' >&2
+  return 1
+}

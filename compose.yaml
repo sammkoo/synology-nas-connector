@@ -1,0 +1,16 @@
+services:
+  connector:
+    build: .
+    user: "${NAS_UID:-1000}:${NAS_GID:-1000}"
+    ports: ["127.0.0.1:8787:8787"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    mem_limit: 256m
+    cpus: 1
+    tmpfs: ["/tmp:size=16m,mode=1777"]
+    volumes:
+      - ./.local:/config:ro
+      - ./examples/documents:/data/documents:ro
+    restart: unless-stopped

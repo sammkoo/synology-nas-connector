@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Synology NAS Connector</title><link rel="stylesheet" href="style.css"><script src="app.js" defer></script></head>
+<body><main><header><span class="badge">READ ONLY · v0.1</span><h1>Synology NAS Connector</h1><p>Share only the folders you choose with an MCP client.</p></header>
+<section><h2>Service connection</h2><p>Open this dashboard through the connector's local address or your configured HTTPS reverse proxy. On DSM, follow the setup instructions in the NAS Connector shortcut.</p>
+<form id="connection"><label for="token">Local access token</label><input id="token" name="token" type="password" autocomplete="off" required minlength="32"><button>Check service</button></form>
+<p class="muted">The token is kept in memory for this page only. It is never placed in a URL or browser storage.</p><p id="message" role="status">Not checked</p></section>
+<section><h2>Allowed folders</h2><ul id="roots"><li>Check the service to view configured folder aliases.</li></ul><p>Edit the private <code>config.json</code> and restart the service to change access. New installations expose no folders.</p></section>
+<section><h2>ChatGPT connection</h2><span class="badge">PLANNED</span><p>OAuth linking and Sign in with ChatGPT are not enabled in v0.1. Local access tokens are for development and self-hosted MCP clients. Public ChatGPT access requires a reachable HTTPS endpoint and a complete MCP OAuth provider.</p></section>
+<footer>Independent open-source project. Not affiliated with Synology or OpenAI.</footer></main></body></html>

@@ -1,0 +1,8 @@
+{
+  "roots": [{"id": "documents", "label": "Demo documents", "path": "/REPLACE/WITH/ABSOLUTE/PATH/examples/documents"}],
+  "http": {
+    "tokenFile": "../.local/token", "host": "127.0.0.1", "port": 8787,
+    "allowedHosts": ["127.0.0.1", "localhost"],
+    "allowedOrigins": ["http://127.0.0.1:8787", "http://localhost:8787"]
+  }
+}
