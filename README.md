@@ -10,7 +10,7 @@ Development now includes [durable gateway OAuth, NAS ownership pairing and brows
 
 ## Quick start
 
-Use Node.js 22 (Node.js 24 is also covered by CI) and Python 3 for packaging.
+Use Node.js 22 (Node.js 24 is also covered by CI), Python 3 for packaging and OpenSSL for disposable TLS test certificates. Docker installs OpenSSL only in its build/test stage.
 
 ```sh
 npm ci
