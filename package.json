@@ -16,13 +16,15 @@
     "build": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test tests/*.test.ts",
-    "check": "npm run typecheck && npm test && npm run build && npm run test:bundle",
+    "check": "npm run typecheck && npm test && npm run build && npm run test:bundle && npm run test:gateway-bundle",
     "test:bundle": "node scripts/smoke-bundle.mjs",
     "dev": "tsx watch apps/server/src/cli.ts",
     "start": "node dist/server.cjs",
     "init": "node scripts/init-config.mjs",
     "spk": "python3 scripts/build-spk.py",
-    "test:spk": "python3 scripts/test-spk.py"
+    "test:spk": "python3 scripts/test-spk.py",
+    "gateway": "tsx apps/gateway/src/cli.ts",
+    "test:gateway-bundle": "node scripts/smoke-gateway.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.31.0",

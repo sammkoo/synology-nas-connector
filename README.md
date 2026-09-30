@@ -6,7 +6,7 @@ Independent, MIT-licensed **v0.1 developer preview**. A read-only MCP server for
 
 **Remaining product gates:** DSM pairing controls, gateway deployment, real ChatGPT linking, Sign in with ChatGPT and public distribution. These features are disabled in the NAS UI. A `.spk` build is not proof of installation compatibility; real DSM testing remains a release gate.
 
-Development now includes [durable gateway OAuth, NAS ownership pairing and browser consent](docs/gateway-auth.md), plus an [outbound WSS relay and protected MCP resource](docs/relay.md). These components are tested through real local TLS, separately from the shipped NAS service. The gateway browser has first-party sessions, a folder consent screen and disconnection controls. DSM pairing integration, deployment tooling, public HTTPS hosting and real ChatGPT linking remain required.
+Development now includes [durable gateway OAuth, NAS ownership pairing and browser consent](docs/gateway-auth.md), plus an [outbound WSS relay and protected MCP resource](docs/relay.md). These components are tested through real local TLS, separately from the shipped NAS service. The gateway browser has first-party sessions, a folder consent screen and disconnection controls. A [native/Docker gateway service](docs/gateway-deployment.md) now supplies private initialization, listener limits and restart-safe state. DSM pairing integration, public HTTPS hosting and real ChatGPT linking remain required.
 
 ## Quick start
 
@@ -72,6 +72,10 @@ NAS_UID=$(id -u) NAS_GID=$(id -g) docker compose up --build
 
 The selected UID/GID must own `.local/token` and be able to traverse the mounted directories. Linux Docker uses descriptor-relative file access. The image runs without root, capabilities or a writable root filesystem. No Docker daemon is required for native local development.
 
+## Gateway service
+
+The separate gateway has its own private state/key and supports direct HTTPS or a loopback TLS proxy. Its CLI and Docker target are tested independently of DSM. Follow [gateway deployment](docs/gateway-deployment.md) to initialize with a real issuer/callback allowlist, install TLS files and start `dist/gateway.cjs`. The NAS package still requires agent/pairing controls before ordinary users can connect through it.
+
 ## DSM package
 
 ```sh
@@ -88,9 +92,10 @@ Output: `artifacts/SynologyNASConnector-0.1.0-0004-noarch.spk` and its SHA-256 c
 packages/core/      filesystem policy, limits, config; no DSM or MCP dependency
 packages/auth/      local-token authentication and future OAuth adapter contract
 packages/management/ signed bridge, share catalog and private configuration service
-packages/gateway/   OAuth, signed pairing, first-party sessions and browser consent
+packages/gateway/   OAuth, signed pairing, browser consent and deployment runtime
 packages/relay/     persistent NAS identity, outbound WSS agent and bounded protocol
 apps/server/        MCP tool definitions, HTTP transport, stdio CLI
+apps/gateway/       gateway initialization, service and verified local health CLI
 apps/dsm-ui/        static dashboard served locally and packaged for DSM
 apps/dsm-bridge/    authenticated DSM CGI bridge; no DSM credentials forwarded
 packaging/synology/ INFO, privilege policy, lifecycle scripts and DSM launcher

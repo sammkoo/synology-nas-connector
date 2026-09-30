@@ -6,8 +6,11 @@ await build({entryPoints:['apps/dsm-bridge/src/cgi.ts'],outfile:'dist/dsm-bridge
   platform:'node',target:'node22',format:'cjs',legalComments:'eof'});
 const result = await build({entryPoints: ['apps/server/src/cli.ts'], outfile: 'dist/server.cjs', bundle: true,
   platform: 'node', target: 'node22', format: 'cjs', sourcemap: false, legalComments: 'eof', metafile: true});
+const gateway = await build({entryPoints:['apps/gateway/src/cli.ts'],outfile:'dist/gateway.cjs',bundle:true,
+  platform:'node',target:'node22',format:'cjs',legalComments:'eof',metafile:true,external:['bufferutil','utf-8-validate']});
+async function writeNotices(metafile,filename) {
 const used = new Set();
-for (const input of Object.keys(result.metafile.inputs)) {
+for (const input of Object.keys(metafile.inputs)) {
   const split = input.lastIndexOf('node_modules/');
   if (split < 0) continue;
   const pieces = input.slice(split + 'node_modules/'.length).split('/');
@@ -22,6 +25,9 @@ for (const dir of [...used].sort()) {
   notices.push(`${manifest.name} ${manifest.version} (${manifest.license})\n` +
     (await Promise.all(licenses.map(f => readFile(path.join(dir, f), 'utf8')))).join('\n'));
 }
-await writeFile('dist/THIRD_PARTY_NOTICES.txt', notices.join('\n\n----------------------------------------\n\n'));
+await writeFile(filename, notices.join('\n\n----------------------------------------\n\n'));
+}
+await writeNotices(result.metafile,'dist/THIRD_PARTY_NOTICES.txt');
+await writeNotices(gateway.metafile,'dist/GATEWAY_THIRD_PARTY_NOTICES.txt');
 await cp('apps/dsm-ui/public', 'dist/ui', {recursive: true});
-console.log('Built portable Node.js server and DSM UI');
+console.log('Built portable NAS server, gateway service and DSM UI');

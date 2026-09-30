@@ -8,3 +8,5 @@ export { createGatewayApp,type GatewayEdgeOptions } from './app.js';
 export { createGatewayRuntime } from './app.js';
 export { GatewayEdgeGuard } from './edge.js';
 export { GatewayRelay } from './relay.js';
+export { initializeGateway,loadGatewayDeployment,gatewayDeploymentSchema,type GatewayDeploymentConfig } from './deployment.js';
+export { startGateway,checkGatewayHealth } from './service.js';

@@ -40,6 +40,7 @@ export function createGatewayApp(oauth:GatewayOAuthProvider,edge:GatewayEdgeOpti
   if(relay)app.use(gatewayMcpRouter(oauth,relay));
   app.use(gatewayOAuthRouter(oauth));
   app.use((_req,res)=>{res.status(404).json({error:'not_found'});});
+  app.use((_error:unknown,_req:express.Request,res:express.Response,_next:express.NextFunction)=>{if(!res.headersSent)res.status(503).json({error:'gateway_unavailable'});else res.end();});
   return app;
 }
 export function createGatewayRuntime(oauth:GatewayOAuthProvider,edge:GatewayEdgeOptions={}) {

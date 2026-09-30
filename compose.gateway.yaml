@@ -1,0 +1,21 @@
+services:
+  gateway:
+    build:
+      context: .
+      target: gateway
+    user: "${GATEWAY_UID:-1000}:${GATEWAY_GID:-1000}"
+    # Direct TLS inside the container; publish locally for an operator-managed edge.
+    ports: ["127.0.0.1:8788:8788"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    mem_limit: 512m
+    cpus: 1
+    tmpfs: ["/tmp:size=16m,mode=1777"]
+    volumes:
+      - ./.gateway/config.json:/config/config.json:ro
+      - ./.gateway/tls:/config/tls:ro
+      - ./.gateway/state:/config/state
+    stop_grace_period: 10s
+    restart: unless-stopped

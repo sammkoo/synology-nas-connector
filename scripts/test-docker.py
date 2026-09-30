@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import ssl
 import subprocess
 import tempfile
 import time
@@ -46,5 +47,64 @@ with tempfile.TemporaryDirectory() as temporary:
             "require('fs').writeFileSync('/data/attempt.txt','must fail')"],capture_output=True)
         assert write.returncode != 0 and not (folder/'attempt.txt').exists()
         print('Docker HTTP/MCP smoke and read-only mount verified')
+    finally:
+        subprocess.run(['docker','rm','-f',container],check=True,stdout=subprocess.DEVNULL)
+
+# Exercise the actual gateway image and its shipped CLI, not a fixture server.
+run('docker','build','--target','gateway','-t','nas-gateway:ci','.')
+with tempfile.TemporaryDirectory() as temporary:
+    folder = Path(temporary)
+    user = f'{os.getuid()}:{os.getgid()}'
+    run('docker','run','--rm','--network=none','--read-only','--cap-drop=ALL',
+        '--security-opt=no-new-privileges:true','--user',user,'-v',f'{folder}:/config',
+        'nas-gateway:ci','node','dist/gateway.cjs','--init','--config','/config/config.json',
+        '--issuer','https://localhost:8788/','--callback','https://client.example/callback')
+    cert, key = folder/'tls/cert.pem', folder/'tls/key.pem'
+    subprocess.run(['openssl','req','-x509','-newkey','ec','-pkeyopt','ec_paramgen_curve:prime256v1',
+        '-nodes','-days','2','-subj','/CN=localhost','-addext','subjectAltName=DNS:localhost,IP:127.0.0.1',
+        '-keyout',str(key),'-out',str(cert)],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    config = json.loads((folder/'config.json').read_text())
+    config['transport']['host'] = '0.0.0.0'
+    (folder/'config.json').write_text(json.dumps(config))
+    original_key = (folder/'state/auth.key').read_bytes()
+    context = ssl.create_default_context(cafile=str(cert))
+    container = run('docker','run','-d','--read-only','--cap-drop=ALL',
+        '--security-opt=no-new-privileges:true','--user',user,'--pids-limit=64','--memory=512m',
+        '-p','127.0.0.1::8788','--env','NODE_EXTRA_CA_CERTS=/config/tls/cert.pem',
+        '-v',f'{folder}/config.json:/config/config.json:ro','-v',f'{folder}/tls:/config/tls:ro',
+        '-v',f'{folder}/state:/config/state','nas-gateway:ci')
+    try:
+        port = run('docker','port',container,'8788/tcp').rsplit(':',1)[1]
+        base = f'https://127.0.0.1:{port}'
+        def gateway_request(route, body=None):
+            headers = {'Host':'localhost:8788'}
+            if body is not None: headers.update({'Content-Type':'application/json','Accept':'application/json, text/event-stream'})
+            req = urllib.request.Request(base+route, data=None if body is None else json.dumps(body).encode(), headers=headers)
+            with urllib.request.urlopen(req,context=context,timeout=3) as response:
+                return json.loads(response.read().decode())
+        def ready():
+            for _ in range(40):
+                try:
+                    assert gateway_request('/health') == {'status':'ready','relay':'attached'}
+                    return
+                except OSError: time.sleep(0.2)
+            raise AssertionError('gateway container failed to start')
+        ready()
+        run('docker','exec',container,'node','dist/gateway.cjs','--healthcheck')
+        metadata = gateway_request('/.well-known/oauth-protected-resource/mcp')
+        assert metadata['resource'] == 'https://localhost:8788/mcp'
+        catalog = gateway_request('/mcp',{'jsonrpc':'2.0','id':1,'method':'tools/list'})
+        assert len(catalog['result']['tools']) == 5
+        assert all(tool['securitySchemes'] == [{'type':'oauth2','scopes':['nas:read']}] for tool in catalog['result']['tools'])
+        denied = gateway_request('/mcp',{'jsonrpc':'2.0','id':2,'method':'tools/call','params':{'name':'list_roots'}})['result']
+        assert denied['isError'] and denied['_meta']['mcp/www_authenticate']
+        write = subprocess.run(['docker','exec',container,'node','-e',
+            "require('fs').writeFileSync('/config/config.json','must fail')"],capture_output=True)
+        assert write.returncode != 0
+        run('docker','restart',container)
+        ready()
+        assert (folder/'state/auth.key').read_bytes() == original_key
+        run('docker','exec',container,'node','dist/gateway.cjs','--healthcheck')
+        print('Gateway Docker TLS, OAuth metadata/catalog, read-only config, private writable state and restart verified')
     finally:
         subprocess.run(['docker','rm','-f',container],check=True,stdout=subprocess.DEVNULL)

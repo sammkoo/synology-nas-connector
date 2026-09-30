@@ -6,9 +6,10 @@ Latest local verification: **2026-10-01** (MCP authentication rechecked 2026-10-
 | --- | --- |
 | `npm ci --ignore-scripts --offline` / locked dependencies | exact dependencies restored from local cache; lockfile included |
 | `npm run typecheck` | passed |
-| `npm test` under Node.js 22 | **64 tests passed, 0 failed** after actual TLS relay, cancellation, reconnect, revocation and wire-level authentication additions |
+| `npm test` under Node.js 22 | **72 tests passed, 0 failed** after gateway service/state recovery, socket/database limits, actual TLS relay and revocation additions |
 | `npm run build` | portable CommonJS bundle and static UI built |
 | `npm run test:bundle` | official MCP client initialized the bundled stdio process, listed five tools and read a sample document |
+| `npm run test:gateway-bundle` | actual bundled CLI initialized private state, served verified TLS/OAuth/catalog, rejected concurrent startup, preserved registrations after restart and refused missing keys |
 | HTTP integration | official SDK client initialized, listed tools and read text through authenticated Streamable HTTP |
 | File policy | traversal, symlinks, hidden/sensitive names, invalid UTF-8, binary and oversized text rejected; scan limits and pagination exercised |
 | Auth/HTTP policy | token permissions, root grants, scope/provider failure, Host, Origin, request sizes and global rate limit exercised |
@@ -31,6 +32,8 @@ Latest local verification: **2026-10-01** (MCP authentication rechecked 2026-10-
 
 
 - Gateway browser CI: [run 36784826666](https://github.com/sammkoo/synology-nas-connector/actions/runs/36784826666) passed for commit `b0df6ac`, including Linux Node.js 22/24, Docker runtime, audit and SPK validation.
-- Build `0004` adds shared strict operations, cancellable reads and preserved wire-level OAuth tool metadata. Its 64-test check, bundle smoke test and reproducible SPK verification passed locally. `tests/relay.test.ts` covers actual HTTPS/WSS, all tools, two NAS with identical aliases, revocation during reads, malicious responses, bounded cancelled I/O, wrong trust, replay, reconnect and deadline behavior. See [relay evidence](relay.md). Remote CI for this change must be checked after publication.
+- Build `0004` adds shared strict operations, cancellable reads and preserved wire-level OAuth tool metadata. Its 64-test check, bundle smoke test and reproducible SPK verification passed locally. `tests/relay.test.ts` covers actual HTTPS/WSS, all tools, two NAS with identical aliases, revocation during reads, malicious responses, bounded cancelled I/O, wrong trust, replay, reconnect and deadline behavior. See [relay evidence](relay.md). The relay build and Docker tooling correction passed [run 36789749389](https://github.com/sammkoo/synology-nas-connector/actions/runs/36789749389) for commit `68da948` under Linux Node.js 22/24, Docker runtime, audit and SPK validation.
+
+- Gateway deployment now verifies eight additional runtime/security scenarios and the bundled process through real TLS. The expanded Docker smoke script builds the gateway target and exercises private state, verified TLS, OAuth catalog and restart; remote CI must be inspected after publication. The NAS SPK remains build `0004`, byte-identical at SHA-256 `2deb9dcde65ae205994d0ddadab12763728d4ba76b7a7475cc5379825601b5d4`.
 
 Run the recorded commands again on changes. The real-device release checklist is in `installation.md`. Artifacts and private local configuration are ignored by Git; no secrets or NAS documents are needed to rerun tests.
