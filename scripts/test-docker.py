@@ -102,9 +102,20 @@ with tempfile.TemporaryDirectory() as temporary:
             "require('fs').writeFileSync('/config/config.json','must fail')"],capture_output=True)
         assert write.returncode != 0
         run('docker','restart',container)
+        # Docker may allocate a different ephemeral host port at restart.
+        # Re-read authoritative mapping instead of probing the stopped endpoint.
+        restarted_port = run('docker','port',container,'8788/tcp').rsplit(':',1)[1]
+        print(f'Gateway fixture host port before/after restart: {port}/{restarted_port}')
+        base = f'https://127.0.0.1:{restarted_port}'
         ready()
         assert (folder/'state/auth.key').read_bytes() == original_key
         run('docker','exec',container,'node','dist/gateway.cjs','--healthcheck')
         print('Gateway Docker TLS, OAuth metadata/catalog, read-only config, private writable state and restart verified')
+    except Exception:
+        print('Gateway fixture state:',run('docker','inspect','--format',
+            '{{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}}',container))
+        # This CLI emits fixed status codes, never request/credential/body logs.
+        print(run('docker','logs','--tail','10',container))
+        raise
     finally:
         subprocess.run(['docker','rm','-f',container],check=True,stdout=subprocess.DEVNULL)
