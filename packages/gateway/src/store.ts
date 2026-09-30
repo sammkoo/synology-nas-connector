@@ -47,6 +47,11 @@ export class GatewayStore {
   }
   delete(kind:string,id:string){this.db.prepare('DELETE FROM records WHERE kind=? AND id=?').run(kind,id);}
   count(kind:string){return Number(this.db.prepare('SELECT COUNT(*) AS n FROM records WHERE kind=? AND expires>?').get(kind,this.now())!.n);}
+  list<T>(kind:string,limit:number):{id:string;data:T}[] {
+    if(!Number.isInteger(limit)||limit<1||limit>10000)throw new Error('Invalid record limit');
+    return this.db.prepare('SELECT id,data FROM records WHERE kind=? AND expires>? ORDER BY id LIMIT ?').all(kind,this.now(),limit)
+      .map(row=>({id:String(row.id),data:JSON.parse(String(row.data)) as T}));
+  }
   prune(){this.db.prepare('DELETE FROM records WHERE expires<=?').run(this.now());}
   transaction<T>(operation:()=>T):T {
     if(this.inTransaction)throw new Error('Nested gateway transaction is not supported');

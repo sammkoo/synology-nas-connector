@@ -2,3 +2,6 @@ export * from './store.js';
 export * from './oauth.js';
 export * from './router.js';
 export * from './pairing.js';
+export { GatewaySessions,SESSION_COOKIE,type BrowserSession } from './sessions.js';
+export { gatewayBrowserRouter } from './browser.js';
+export { createGatewayApp,type GatewayEdgeOptions } from './app.js';

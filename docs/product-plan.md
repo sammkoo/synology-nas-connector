@@ -30,3 +30,7 @@ No broad completion claim is justified by a green unit suite alone. Hosting and 
 3. Implement user/device pairing, outbound relay and complete MCP OAuth with resource-bound, revocable grants. Keep identity, NAS consent and data transit separate.
 4. Deploy an approved HTTPS gateway, test real ChatGPT linking and NAS reconnection/revocation behavior.
 5. Verify device installation and upgrades, fix product-level failures, ship release artifacts and complete the acceptance audit above.
+
+## Current checkpoint (2026-10-01)
+
+Published management build `0002` and gateway-protocol build `0003` passed Linux CI (Node.js 22/24), Docker runtime and reproducible SPK checks. The gateway browser control plane now implements durable first-party sessions, NAS proof-based sign-in, explicit folder consent, cancellation, sign-out and disconnection. Local HTTP and browser fixtures verify those components. The NAS-facing SPK has no gateway pairing/relay agent yet. Implement outbound data transport and its DSM controls next; do not equate these control-plane checks with a deployed ChatGPT connection. The real NAS upgrade also awaits acceptance of the specific liability consent displayed by DSM.

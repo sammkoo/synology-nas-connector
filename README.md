@@ -6,7 +6,7 @@ Independent, MIT-licensed **v0.1 developer preview**. A read-only MCP server for
 
 **Planned:** production MCP OAuth, account pairing, Sign in with ChatGPT, public plugin distribution and an optional outbound relay. These features are visibly disabled. A `.spk` build is not proof of installation compatibility; real DSM testing remains a release gate.
 
-Development now includes [durable gateway OAuth and NAS ownership pairing](docs/gateway-auth.md), tested separately from the shipped NAS service. Browser sessions/consent, relay transport, HTTPS deployment and real ChatGPT linking remain under development.
+Development now includes [durable gateway OAuth, NAS ownership pairing and browser consent](docs/gateway-auth.md), tested separately from the shipped NAS service. The control-plane app has first-party sessions, a folder consent screen and disconnection controls. Relay transport, DSM pairing integration, HTTPS deployment and real ChatGPT linking remain under development.
 
 ## Quick start
 
@@ -88,7 +88,7 @@ Output: `artifacts/SynologyNASConnector-0.1.0-0003-noarch.spk` and its SHA-256 c
 packages/core/      filesystem policy, limits, config; no DSM or MCP dependency
 packages/auth/      local-token authentication and future OAuth adapter contract
 packages/management/ signed bridge, share catalog and private configuration service
-packages/gateway/   durable OAuth protocol, credential revocation and NAS pairing
+packages/gateway/   OAuth, signed pairing, first-party sessions and browser consent
 apps/server/        MCP tool definitions, HTTP transport, stdio CLI
 apps/dsm-ui/        static dashboard served locally and packaged for DSM
 apps/dsm-bridge/    authenticated DSM CGI bridge; no DSM credentials forwarded

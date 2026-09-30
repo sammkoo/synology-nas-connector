@@ -57,6 +57,7 @@ export class GatewayOAuthProvider implements OAuthServerProvider {
     if(!registered||registered.token_endpoint_auth_method!=='none'||registered.redirect_uris.some(uri=>!this.options.redirectUris.includes(uri)))throw new InvalidGrantError('Unknown client');
     return registered;
   }
+  callbackOrigins(){return [...new Set(this.options.redirectUris.map(uri=>new URL(uri).origin))];}
   /** Called after verified account/device pairing, never with an unverified browser subject. */
   registerDevice(subject:string,label:string,rootIds:string[]) {
     if(!subject||subject.length>256||!label||label.length>100||!this.validRoots(rootIds))throw new InvalidRequestError('Invalid paired device');
@@ -67,11 +68,15 @@ export class GatewayOAuthProvider implements OAuthServerProvider {
   deviceIsActive(deviceId:string,subject:string) {
     const device=this.store.get<Device>('device',deviceId);return Boolean(device&&!device.revoked&&device.subject===subject);
   }
+  devicesFor(subject:string) {
+    return this.store.list<Device>('device',10000).filter(row=>row.data.subject===subject&&!row.data.revoked)
+      .map(row=>({id:row.id,label:row.data.label,rootIds:[...row.data.rootIds]}));
+  }
   setDeviceRoots(deviceId:string,subject:string,rootIds:string[]) {
     const device=this.store.get<Device>('device',deviceId);
     if(!device||device.subject!==subject||device.revoked||!this.validRoots(rootIds))throw new InvalidGrantError('Device unavailable');
     const revision=device.revision+1;
-    const rootVersions=Object.fromEntries(rootIds.map(id=>[id,device.rootVersions[id]??revision]));
+    const rootVersions=Object.fromEntries(rootIds.map(id=>[id,Object.hasOwn(device.rootVersions,id)?device.rootVersions[id]:revision]));
     this.store.put('device',deviceId,{...device,rootIds,rootVersions,revision},this.store.now()+3650*DAY);
   }
   revokeDevice(deviceId:string,subject:string) {

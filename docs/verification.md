@@ -1,12 +1,12 @@
 # Verification record
 
-Date: **2026-09-30**. Local host: macOS arm64. Target runtime additionally exercised using **Node.js v22.23.3** from the npm Node runtime package; host Node.js v23.7.0 was used during initial development. This is a developer-preview validation record, not a NAS compatibility certification.
+Latest local verification: **2026-10-01** (integration references fetched 2026-09-30). Local host: macOS arm64. Target runtime additionally exercised using **Node.js v22.23.3** from the npm Node runtime package; host Node.js v23.7.0 was used during initial development. This is a developer-preview validation record, not a NAS compatibility certification.
 
 | Check | Observed result |
 | --- | --- |
 | `npm ci --ignore-scripts --offline` / locked dependencies | exact dependencies restored from local cache; lockfile included |
 | `npm run typecheck` | passed |
-| `npm test` under Node.js 22 | **41 tests passed, 0 failed** after gateway OAuth/pairing and device isolation additions |
+| `npm test` under Node.js 22 | **48 tests passed, 0 failed** after gateway browser sign-in/consent, cancellation and device isolation additions |
 | `npm run build` | portable CommonJS bundle and static UI built |
 | `npm run test:bundle` | official MCP client initialized the bundled stdio process, listed five tools and read a sample document |
 | HTTP integration | official SDK client initialized, listed tools and read text through authenticated Streamable HTTP |
@@ -26,6 +26,7 @@ Date: **2026-09-30**. Local host: macOS arm64. Target runtime additionally exerc
 - Sign in with ChatGPT, public ChatGPT linking, relay and directory approval: not implemented or tested. The MCP OAuth protocol library is implemented and locally tested; browser sign-in and deployed account linking remain required. Official integration documentation was fetched and the distinction between identity and NAS authorization is recorded in `openai-integration.md`.
 - New management build: HMAC tampering/replay/address checks, administrator/origin restrictions, CSRF, durable root selection, stale revisions, live-session revocation, in-flight read revocation and credential-preserving package migration are covered by the added test suite. Real DSM CGI execution and account linking remain unverified.
 - Build `0002` Linux CI: [run 36679752569](https://github.com/sammkoo/synology-nas-connector/actions/runs/36679752569) passed for commit `3b93b5f`, including Node.js 22/24, Docker runtime and reproducible SPK validation. Build `0003` adds gateway protocol tests and corrected DSM checkbox/select styling; its local 41-test check, bundle smoke test and reproducible SPK check passed. Its DSM UI fixture saved a folder and listed `welcome.txt` in a browser.
-- Gateway authorization implementation: HTTP discovery/DCR/PKCE/refresh/revocation, durable restart state, immutable NAS ownership and Ed25519 pairing proof are exercised in local tests. The relay, browser account/consent routes and deployed real ChatGPT linking are not established by these protocol fixtures. See `gateway-auth.md`.
+- Gateway protocol build: [run 36782250092](https://github.com/sammkoo/synology-nas-connector/actions/runs/36782250092) passed for commit `6712b83` under Linux Node.js 22/24, including Docker runtime, dependency audit and SPK validation.
+- Gateway browser implementation: native code entry, comparison and simulated-NAS signed sign-in reached the consent screen in an isolated local browser fixture; root checkboxes start unchecked. HTTP tests cover first-party sessions, Origin/CSRF, handle binding, private state, revocation, logout, restart and cancellation. Browser testing found and corrected a `no-referrer` policy that changed form Origin to null; the final fixture observed its real local Origin and retained rejection of null Origin. TLS/cookies are simulated only in the disposable preview shim. The relay, real DSM pairing and deployed ChatGPT linking are still unverified. See `gateway-auth.md`.
 
 Run the recorded commands again on changes. The real-device release checklist is in `installation.md`. Artifacts and private local configuration are ignored by Git; no secrets or NAS documents are needed to rerun tests.

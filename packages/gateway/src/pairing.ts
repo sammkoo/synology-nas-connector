@@ -45,10 +45,27 @@ export class DevicePairing {
       if(subject&&identity&&subject!==identity.subject)throw new InvalidGrantError('NAS belongs to another account');
       const comparison=String(randomBytes(4).readUInt32BE()%1_000_000).padStart(6,'0');
       const browserKey=this.store.key('pair-browser',browserSessionId);
+      if(this.store.get('pair-browser',browserKey))throw new InvalidGrantError('A pairing is already pending in this browser');
       const next={...pair,browserKey,comparison,...(subject?{requestedSubject:subject}:{})};
       this.store.put('pair',lookup!.deviceKey,next,pair.expires);
       this.store.put('pair-browser',browserKey,{deviceKey:lookup!.deviceKey},pair.expires);
       return {label:pair.label,comparison,expiresIn:Math.max(0,Math.floor((pair.expires-this.store.now())/1000))};
+    });
+  }
+  browserStatus(browserSessionId:string) {
+    const browserKey=this.store.key('pair-browser',browserSessionId),lookup=this.store.get<{deviceKey:string}>('pair-browser',browserKey);
+    const pair=lookup?this.store.get<Pair>('pair',lookup.deviceKey):undefined;
+    if(!pair||pair.browserKey!==browserKey||pair.consumed)throw new InvalidGrantError('Pairing expired');
+    return {label:pair.label,comparison:pair.comparison!,approved:Boolean(pair.approved),expiresIn:Math.max(0,Math.floor((pair.expires-this.store.now())/1000))};
+  }
+  cancelBrowser(browserSessionId:string) {
+    this.store.transaction(()=>{
+      const browserKey=this.store.key('pair-browser',browserSessionId),lookup=this.store.get<{deviceKey:string}>('pair-browser',browserKey);
+      const pair=lookup?this.store.get<Pair>('pair',lookup.deviceKey):undefined;
+      if(pair&&pair.browserKey===browserKey&&!pair.consumed){
+        this.store.delete('pair-user',pair.userCodeKey);this.store.delete('pair',lookup!.deviceKey);
+      }
+      this.store.delete('pair-browser',browserKey);
     });
   }
   private identityKey(publicKey:string){return createHash('sha256').update(Buffer.from(publicKey,'base64url')).digest('hex');}
