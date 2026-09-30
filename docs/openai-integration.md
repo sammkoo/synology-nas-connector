@@ -6,7 +6,7 @@ Verified against fetched official documentation on **2026-09-30**. Capabilities 
 
 [OpenAI plugin authentication](https://developers.openai.com/plugins/build/auth) describes the MCP authorization contract: the connector is a protected resource, an authorization server issues user grants, and ChatGPT/Codex are MCP clients. Authenticated MCP integration uses OAuth authorization-code + PKCE S256, protected-resource metadata, authorization-server discovery, audience/resource binding and scope checks on every request. Supported client identification options include CIMD, dynamic registration and predefined clients. Use the exact callback shown by the connection management page rather than inventing a callback URL.
 
-v0.1 implements only a local bearer-token verifier and an `Authenticator` contract for a later OAuth adapter. It does not advertise OAuth, emit fake OpenAI URLs or mark the NAS as linked. Static-token testing with a local MCP client is not production ChatGPT linking. Production deployment must implement and test the entire discovery/consent/token/revocation flow and current tool `securitySchemes`/authentication challenge requirements from the official guide.
+The shipped NAS CLI still uses a local bearer-token verifier and does not advertise OAuth or mark the NAS as linked. `packages/gateway` now implements the separate durable OAuth protocol, public-client registration, PKCE, revocation and cryptographic NAS-pairing services described in [gateway authorization](gateway-auth.md). Browser sessions/consent, the relay and deployment are still integration gates. Static-token testing with a local MCP client is not production ChatGPT linking. Production deployment must test the entire discovery/consent/token/revocation flow and current tool `securitySchemes`/authentication challenge requirements from the official guide.
 
 ## Sign in with ChatGPT
 
@@ -14,7 +14,7 @@ v0.1 implements only a local bearer-token verifier and an `Authenticator` contra
 
 [OpenAI's open-source integration article](https://developers.openai.com/cookbook/articles/sign-in-with-chatgpt) separates identity from optional eligible ChatGPT plan usage. Neither grants access to ChatGPT conversation history. NAS file-access grants are separate from identity and inference permissions. An OpenAI API access token is not a NAS access token, and sign-in does not solve network reachability.
 
-We intentionally ship no partial login implementation: no callback listener, token exchange, OpenAI credential storage, fabricated identity claims, client registration or API calls. The UI describes this as planned. This avoids presenting a login URL as a complete integration.
+The website route was rechecked: it is a limited trial for selected commercial partners and requires a provisioned client and exact callback. The project's NAS ownership pairing and its own MCP client registration are separate from OpenAI identity registration. No OpenAI callback listener, OpenAI token exchange/storage, invented identity claims or inference calls are enabled. The UI describes OpenAI linking as planned.
 
 ## Network path and distribution
 

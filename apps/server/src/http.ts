@@ -5,7 +5,7 @@ import type { Config, NasFiles } from '../../../packages/core/src/index.js';
 import { NAS_READ_SCOPE, type Authenticator } from '../../../packages/auth/src/index.js';
 import { createMcpServer, type FileProvider } from './mcp.js';
 
-export function createHttpApp(config: Config, source: FileProvider, auth: Authenticator, uiDir: string, management?: express.Router) {
+export function createHttpApp(config: Config, source: FileProvider, auth: Authenticator, uiDir: string, management?: express.Router, expectedDeviceId?: string) {
   const current = typeof source === 'function' ? source : () => source;
   const app = express();
   app.disable('x-powered-by');
@@ -74,6 +74,7 @@ export function createHttpApp(config: Config, source: FileProvider, auth: Authen
     try { principal = match ? await auth.authenticate(match[1]!) : null; } catch { /* Fail closed. */ }
     if (!principal) {res.status(401).set('WWW-Authenticate', auth.challenge).json({error: 'UNAUTHORIZED'}); return;}
     if (!principal.scopes.includes(NAS_READ_SCOPE)) {res.status(403).json({error: 'SCOPE_DENIED'}); return;}
+    if (principal.deviceId && principal.deviceId !== expectedDeviceId) {res.status(403).json({error: 'DEVICE_DENIED'}); return;}
     res.locals.principal = principal;
     next();
   }

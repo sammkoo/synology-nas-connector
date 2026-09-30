@@ -46,7 +46,7 @@ def main():
         add(tar, 'dsm/index.html', (META/'dashboard.html').read_bytes())
         add(tar, 'dsm/app.js', (META/'dashboard.js').read_bytes())
         add(tar, 'dsm/api.cgi', (META/'api.cgi').read_bytes(),0o755)
-        add(tar, 'dsm/style.css', (ROOT/'dist/ui/style.css').read_bytes())
+        add(tar, 'dsm/style.css', (META/'dashboard.css').read_bytes())
         for size in (16, 24, 32, 48, 64, 72, 128, 256):
             add(tar, f'dsm/images/app_{size}.png', icon(size))
         add(tar, 'bin/init-config.mjs', (ROOT/'scripts/init-config.mjs').read_bytes())
@@ -60,7 +60,7 @@ def main():
         gz.write(payload.getvalue())
     out = ROOT/'artifacts'
     out.mkdir(exist_ok=True)
-    package = out/'SynologyNASConnector-0.1.0-0002-noarch.spk'
+    package = out/'SynologyNASConnector-0.1.0-0003-noarch.spk'
     with tarfile.open(package, 'w', format=tarfile.USTAR_FORMAT) as tar:
         info = (META/'INFO').read_text()
         info += f'checksum="{hashlib.md5(compressed.getvalue()).hexdigest()}"\n'

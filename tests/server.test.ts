@@ -110,3 +110,15 @@ test('OAuth adapter errors and missing scope fail closed at HTTP boundary', asyn
     } finally {listener.closeAllConnections(); await new Promise<void>(r => listener.close(() => r()));}
   }
 });
+test('a device-scoped OAuth identity cannot access an unbound or different NAS service',async()=>{
+  for(const expected of [undefined,'different-device','paired-device']) {
+    const auth={mode:'oauth' as const,challenge:'Bearer',authenticate:async()=>({subject:'owner',scopes:['nas:read'],deviceId:'paired-device',rootIds:['docs']})};
+    const app=createHttpApp(config,files,auth,path.resolve('apps/dsm-ui/public'),undefined,expected);
+    const listener=app.listen(0,'127.0.0.1');await new Promise<void>(r=>listener.once('listening',r));
+    try{
+      const response=await fetch(`http://127.0.0.1:${(listener.address() as {port:number}).port}/api/status`,{headers:{Authorization:'Bearer candidate'}});
+      assert.equal(response.status,expected==='paired-device'?200:403);
+      if(response.status===403)assert.match(await response.text(),/DEVICE_DENIED/);
+    }finally{listener.closeAllConnections();await new Promise<void>(r=>listener.close(()=>r()));}
+  }
+});

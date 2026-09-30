@@ -3,7 +3,7 @@ import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 
 export const NAS_READ_SCOPE = 'nas:read';
-export type Principal = {subject: string; scopes: readonly string[]; rootIds?: readonly string[]};
+export type Principal = {subject: string; scopes: readonly string[]; rootIds?: readonly string[]; deviceId?: string};
 /** A future OAuth adapter must verify signature/introspection, issuer, audience, expiry, scopes and revocation. */
 export interface Authenticator {
   readonly mode: 'local-token' | 'oauth';
