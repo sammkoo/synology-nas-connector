@@ -4,6 +4,8 @@ import { loadConfig, NasFiles } from '../../../packages/core/src/index.js';
 import { localTokenAuthenticator, NAS_READ_SCOPE } from '../../../packages/auth/src/index.js';
 import { createMcpServer } from './mcp.js';
 import { createHttpApp } from './http.js';
+import { BridgeGuard, ConfigurationStore, readManagementSecret, ShareCatalog } from '../../../packages/management/src/index.js';
+import { managementRouter } from './management.js';
 
 async function main() {
   const args = process.argv.slice(2);
@@ -22,7 +24,16 @@ async function main() {
   } else {
     const auth = await localTokenAuthenticator(config.http.tokenFile);
     const uiDir = process.env.NAS_CONNECTOR_UI_DIR ?? path.resolve('apps/dsm-ui/public');
-    const app = createHttpApp(config, files, auth, uiDir);
+    let source: NasFiles | (() => NasFiles) = files;
+    let management;
+    if (config.management) {
+      if (config.http.host !== '127.0.0.1') throw new Error('Management requires loopback binding');
+      const secretPath = path.resolve(path.dirname(configPath),config.management.secretFile);
+      const store = await ConfigurationStore.create(path.resolve(configPath),config,ShareCatalog.dsm());
+      management = managementRouter(store,new BridgeGuard(await readManagementSecret(secretPath)));
+      source = () => store.getFiles();
+    }
+    const app = createHttpApp(config, source, auth, uiDir, management);
     const listener = app.listen(config.http.port, config.http.host, () => console.error('NAS connector started (read-only)'));
     listener.requestTimeout = 15000;
     listener.headersTimeout = 10000;

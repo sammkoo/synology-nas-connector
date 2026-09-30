@@ -3,9 +3,10 @@ import path from 'node:path';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { Config, NasFiles } from '../../../packages/core/src/index.js';
 import { NAS_READ_SCOPE, type Authenticator } from '../../../packages/auth/src/index.js';
-import { createMcpServer } from './mcp.js';
+import { createMcpServer, type FileProvider } from './mcp.js';
 
-export function createHttpApp(config: Config, files: NasFiles, auth: Authenticator, uiDir: string) {
+export function createHttpApp(config: Config, source: FileProvider, auth: Authenticator, uiDir: string, management?: express.Router) {
+  const current = typeof source === 'function' ? source : () => source;
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', false);
@@ -31,12 +32,13 @@ export function createHttpApp(config: Config, files: NasFiles, auth: Authenticat
     next();
   });
   app.get('/healthz', (_req, res) => res.json({status: 'ok'}));
+  if (management) app.use('/manage', management);
   if (auth.mode === 'oauth' && auth.resourceMetadata) {
     app.get('/.well-known/oauth-protected-resource', (_req, res) => res.json(auth.resourceMetadata));
   }
   app.use('/api', authorize);
   app.get('/api/status', (_req, res) => res.json({version: '0.1.0', mode: auth.mode, readOnly: true,
-    roots: files.listRoots().filter(r => !res.locals.principal.rootIds || res.locals.principal.rootIds.includes(r.id)),
+    roots: current().listRoots().filter(r => !res.locals.principal.rootIds || res.locals.principal.rootIds.includes(r.id)),
     limits: config.limits, chatgpt: {state: 'not-implemented'}}));
   app.use('/mcp', authorize);
   app.post('/mcp', (req, res, next) => {
@@ -48,7 +50,7 @@ export function createHttpApp(config: Config, files: NasFiles, auth: Authenticat
     res.once('finish', release);
     next();
   }, express.json({limit: '16kb', strict: true}), async (req, res) => {
-    const server = createMcpServer(files, res.locals.principal);
+    const server = createMcpServer(current, res.locals.principal);
     const transport = new StreamableHTTPServerTransport({sessionIdGenerator: undefined, enableJsonResponse: true});
     res.once('close', () => {void transport.close(); void server.close();});
     try {

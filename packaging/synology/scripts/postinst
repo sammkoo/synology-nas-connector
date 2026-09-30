@@ -12,3 +12,4 @@ if [ ! -e "$PKG_VAR/config.json" ] && [ ! -e "$PKG_VAR/token" ]; then
   "$NODE" "$PKG_TARGET/bin/init-config.mjs" "$PKG_VAR"
 fi
 test -f "$PKG_VAR/config.json" && test -f "$PKG_VAR/token"
+"$NODE" "$PKG_TARGET/bin/enable-management.mjs" "$PKG_VAR"

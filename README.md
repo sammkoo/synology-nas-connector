@@ -2,7 +2,7 @@
 
 Independent, MIT-licensed **v0.1 developer preview**. A read-only MCP server for selected NAS folders, a portable Node.js core, a DSM dashboard, and a reproducible DSM `.spk` builder. No OpenAI API key, DSM password, file upload, outbound relay, telemetry or inference calls are required.
 
-**Implemented:** folder listing, filename search, metadata, bounded UTF-8 document reads; MCP stdio and stateless Streamable HTTP; bearer-token development authentication; DSM package lifecycle and static dashboard.
+**Implemented:** folder listing, filename search, metadata, bounded UTF-8 document reads; MCP stdio and stateless Streamable HTTP; bearer-token development authentication; DSM package lifecycle. Build 0002 adds an authenticated management bridge, graphical share selection and live policy revocation, pending real DSM CGI validation.
 
 **Planned:** production MCP OAuth, account pairing, Sign in with ChatGPT, public plugin distribution and an optional outbound relay. These features are visibly disabled. A `.spk` build is not proof of installation compatibility; real DSM testing remains a release gate.
 
@@ -78,21 +78,23 @@ npm run spk
 npm run test:spk
 ```
 
-Output: `artifacts/SynologyNASConnector-0.1.0-0001-noarch.spk` and its SHA-256 checksum. See [DSM installation](docs/installation.md) for Package Center installation, folder ACLs, the dashboard and safe local access.
+Output: `artifacts/SynologyNASConnector-0.1.0-0002-noarch.spk` and its SHA-256 checksum. See [DSM management preview](docs/dsm-management.md) for the new setup flow and device-validation limits. The [original installation guide](docs/installation.md) also documents manual/local diagnostics.
 
 ## Project layout
 
 ```text
 packages/core/      filesystem policy, limits, config; no DSM or MCP dependency
 packages/auth/      local-token authentication and future OAuth adapter contract
+packages/management/ signed bridge, share catalog and private configuration service
 apps/server/        MCP tool definitions, HTTP transport, stdio CLI
 apps/dsm-ui/        static dashboard served locally and packaged for DSM
+apps/dsm-bridge/    authenticated DSM CGI bridge; no DSM credentials forwarded
 packaging/synology/ INFO, privilege policy, lifecycle scripts and DSM launcher
 scripts/           portable bundle, SPK builder, package and Docker verification
 tests/             policy, authentication and real MCP SDK client tests
 docs/              architecture, installation, integration evidence, threat model
 ```
 
-GitHub Actions tests on Linux with Node.js 22/24, builds and verifies `.spk`, uploads package artifacts, audits production dependencies, and builds/smoke-tests Docker. No release is published automatically. Push this directory to a new GitHub repository when you choose its owner/name; no remote repository is created by the scaffold.
+GitHub Actions tests on Linux with Node.js 22/24, builds and verifies `.spk`, uploads package artifacts, audits production dependencies, and builds/smoke-tests Docker. Source is published at [sammkoo/synology-nas-connector](https://github.com/sammkoo/synology-nas-connector). No release is published automatically; production promotion requires the [product acceptance evidence](docs/product-plan.md).
 
 See [architecture](docs/architecture.md), [verified OpenAI integration points](docs/openai-integration.md), [security](SECURITY.md), [verification record](docs/verification.md), and [contributing](CONTRIBUTING.md).

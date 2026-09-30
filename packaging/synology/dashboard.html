@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'">
+<title>Synology NAS Connector</title><link rel="stylesheet" href="style.css"><script src="app.js" defer></script></head>
+<body><main><header><p class="eyebrow">YOUR FILES · YOUR CHOICE</p><h1>Synology NAS Connector</h1>
+<p>Let ChatGPT read only the folders you choose. Your files stay on your NAS.</p><span class="pill">Read only</span></header>
+<p id="notice" role="status" aria-live="polite">Checking your DSM session…</p>
+<section><h2>1. Choose folders</h2><p>No folders are shared until you select and save them. You can remove access here at any time.</p>
+<form id="folders"><div id="shares"></div><button id="save" type="submit" disabled>Save folder selection</button></form>
+<p id="permissions" hidden>For unavailable folders, open Control Panel → Shared Folder → Edit → Permissions → System internal user. Give SynologyNASConnector read-only access to those folders, then refresh this page.</p></section>
+<section><h2>2. Connect ChatGPT</h2><p id="connection">ChatGPT account linking is being built. This preview cannot connect your account yet.</p></section>
+<section><h2>3. Check access</h2><p>Check that the connector can list a selected folder.</p>
+<label for="root">Selected folder</label><select id="root" disabled></select><button id="preview" disabled>Check folder</button>
+<ul id="entries"></ul></section><footer>Independent open-source project. Not affiliated with Synology or OpenAI. File contents and names are untrusted data.</footer></main></body></html>

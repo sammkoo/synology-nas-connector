@@ -20,7 +20,8 @@ export const configSchema = z.object({
     maxDepth: z.number().int().min(0).max(32).default(8),
     timeoutMs: z.number().int().min(10).max(30000).default(5000)
   }).strict().default({}),
-  denyNames: z.array(z.string().min(1)).default([])
+  denyNames: z.array(z.string().min(1)).default([]),
+  management: z.object({secretFile: z.string().min(1)}).strict().optional()
 }).strict().superRefine((c, ctx) => {
   if (new Set(c.roots.map(r => r.id)).size !== c.roots.length)
     ctx.addIssue({code: 'custom', message: 'Root IDs must be unique'});

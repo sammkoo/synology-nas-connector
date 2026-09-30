@@ -3,8 +3,10 @@ WORKDIR /app
 COPY package*.json ./
 COPY packages/core/package.json packages/core/package.json
 COPY packages/auth/package.json packages/auth/package.json
+COPY packages/management/package.json packages/management/package.json
 COPY apps/server/package.json apps/server/package.json
 COPY apps/dsm-ui/package.json apps/dsm-ui/package.json
+COPY apps/dsm-bridge/package.json apps/dsm-bridge/package.json
 RUN npm ci
 COPY . .
 RUN npm run check

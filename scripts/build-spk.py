@@ -39,14 +39,18 @@ def main():
     payload = io.BytesIO()
     with tarfile.open(fileobj=payload, mode='w', format=tarfile.USTAR_FORMAT) as tar:
         add(tar, 'server.cjs', (ROOT/'dist/server.cjs').read_bytes())
+        add(tar, 'dsm-bridge.cjs', (ROOT/'dist/dsm-bridge.cjs').read_bytes())
         for p in sorted((ROOT/'dist/ui').rglob('*')):
             if p.is_file(): add(tar, 'ui/' + p.relative_to(ROOT/'dist/ui').as_posix(), p.read_bytes())
         add(tar, 'dsm/config', (META/'ui-config.json').read_bytes())
-        add(tar, 'dsm/index.html', (META/'setup.html').read_bytes())
+        add(tar, 'dsm/index.html', (META/'dashboard.html').read_bytes())
+        add(tar, 'dsm/app.js', (META/'dashboard.js').read_bytes())
+        add(tar, 'dsm/api.cgi', (META/'api.cgi').read_bytes(),0o755)
         add(tar, 'dsm/style.css', (ROOT/'dist/ui/style.css').read_bytes())
         for size in (16, 24, 32, 48, 64, 72, 128, 256):
             add(tar, f'dsm/images/app_{size}.png', icon(size))
         add(tar, 'bin/init-config.mjs', (ROOT/'scripts/init-config.mjs').read_bytes())
+        add(tar, 'bin/enable-management.mjs', (ROOT/'scripts/enable-management.mjs').read_bytes())
         for name in ('node-runtime', 'postinst'):
             add(tar, 'bin/'+name, (META/'scripts'/name).read_bytes(), 0o755)
         add(tar, 'LICENSE', (ROOT/'LICENSE').read_bytes())
@@ -56,7 +60,7 @@ def main():
         gz.write(payload.getvalue())
     out = ROOT/'artifacts'
     out.mkdir(exist_ok=True)
-    package = out/'SynologyNASConnector-0.1.0-0001-noarch.spk'
+    package = out/'SynologyNASConnector-0.1.0-0002-noarch.spk'
     with tarfile.open(package, 'w', format=tarfile.USTAR_FORMAT) as tar:
         info = (META/'INFO').read_text()
         info += f'checksum="{hashlib.md5(compressed.getvalue()).hexdigest()}"\n'

@@ -6,7 +6,7 @@ Date: **2026-09-30**. Local host: macOS arm64. Target runtime additionally exerc
 | --- | --- |
 | `npm ci --ignore-scripts --offline` / locked dependencies | exact dependencies restored from local cache; lockfile included |
 | `npm run typecheck` | passed |
-| `npm test` under Node.js 22 | **15 tests passed, 0 failed** |
+| `npm test` under Node.js 22 | **21 tests passed, 0 failed** for management build 0002 |
 | `npm run build` | portable CommonJS bundle and static UI built |
 | `npm run test:bundle` | official MCP client initialized the bundled stdio process, listed five tools and read a sample document |
 | HTTP integration | official SDK client initialized, listed tools and read text through authenticated Streamable HTTP |
@@ -15,15 +15,15 @@ Date: **2026-09-30**. Local host: macOS arm64. Target runtime additionally exerc
 | `npm audit --omit=dev --audit-level=high` | 0 vulnerabilities reported at verification time |
 | `npm run spk` | `.spk` built successfully with Node.js v22 dependency and package-user privileges |
 | `npm run test:spk` | structure, script syntax, file modes, payload, checksum, static DSM launcher and byte-for-byte rebuild passed |
-| UI browser check | dashboard rendered; ephemeral local test credential showed running read-only service and no exposed roots |
+| UI browser check | original token dashboard rendered; new DSM onboarding exercised with a disposable local fixture: save selection, list sample entry, revoke selection and verify disabled check controls. This fixture does not authenticate a real DSM session |
 | Python build/smoke scripts | syntax parsed successfully |
 
-## Unverified here
+## Remote and device evidence; remaining gates
 
-- Docker build and container smoke: no Docker CLI/daemon is installed on this host. A Linux GitHub Actions job builds the image, makes a real authenticated MCP read and verifies the mounted share rejects writes. That workflow has not been run on GitHub from this local scaffold.
-- Linux descriptor traversal: implemented for DSM/Linux and covered by the same suite when run in Linux CI; local macOS exercises the documented portable fallback. Do not infer Linux test execution from this local report.
-- DSM manual installation, package-account ACL behavior, lifecycle, shortcut, reboot and upgrade: require real NAS hardware. Two Node.js v22 runtime paths are checked at startup. An attempted read-only inspection of the vendor's public runtime SPK found a non-tar vendor container, so its runtime layout was not established by that attempt. Validate the path on the target NAS before promoting the package.
+- Baseline Linux CI: [run 36676696976](https://github.com/sammkoo/synology-nas-connector/actions/runs/36676696976) passed for commit `8aef10f` under Node.js 22 and 24, including Linux file-policy tests, Docker build/runtime MCP read with an OS read-only mount, and SPK validation. No Docker daemon is installed on the local Mac. Later commits require their own green run.
+- Real DSM inspection: DS224+, DSM **7.4.1-90080**, 6144 MB RAM, Node.js package **22.22.3-1010**. Package Center reported connector **0.1.0-0001 Running** on Volume 1. The original launcher produced 404; navigating to the documented `/webman/3rdparty` path showed the setup page. These observations establish installation/service-state/UI behavior only, not successful NAS tool execution.
+- DSM package-account ACL behavior, new CGI management session, reboot, upgrade and real MCP reads: still require device testing. Two Node.js v22 runtime paths are checked at startup; the working baseline service is evidence that at least one matched on DS224+, not certification of every platform.
 - Sign in with ChatGPT, MCP OAuth, public ChatGPT linking, relay and directory approval: planned, not implemented or tested. Official integration documentation was fetched and the distinction between identity and NAS authorization is recorded in `openai-integration.md`.
-- Node.js 24 and GitHub-hosted workflows: configured in CI but not executed in this local session.
+- New management build: HMAC tampering/replay/address checks, administrator/origin restrictions, CSRF, durable root selection, stale revisions, live-session revocation, in-flight read revocation and credential-preserving package migration are covered by the added test suite. Real DSM CGI execution and account linking remain unverified.
 
 Run the recorded commands again on changes. The real-device release checklist is in `installation.md`. Artifacts and private local configuration are ignored by Git; no secrets or NAS documents are needed to rerun tests.

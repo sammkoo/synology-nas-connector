@@ -9,7 +9,7 @@ import tarfile
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-spk = ROOT/'artifacts/SynologyNASConnector-0.1.0-0001-noarch.spk'
+spk = ROOT/'artifacts/SynologyNASConnector-0.1.0-0002-noarch.spk'
 original = spk.read_bytes()
 with tarfile.open(spk) as tar:
     names = set(tar.getnames())
@@ -27,10 +27,12 @@ with tarfile.open(spk) as tar:
                 f.write(tar.extractfile(member).read()); f.flush()
                 subprocess.run(['sh','-n',f.name],check=True)
     with tarfile.open(fileobj=io.BytesIO(data), mode='r:gz') as payload:
-        assert {'server.cjs','ui/index.html','dsm/index.html','dsm/config','bin/init-config.mjs','THIRD_PARTY_NOTICES.txt'} <= set(payload.getnames())
+        assert {'server.cjs','dsm-bridge.cjs','ui/index.html','dsm/index.html','dsm/app.js','dsm/api.cgi','dsm/config','bin/init-config.mjs','bin/enable-management.mjs','THIRD_PARTY_NOTICES.txt'} <= set(payload.getnames())
+        assert payload.getmember('dsm/api.cgi').mode == 0o755
         assert not any('node_modules' in n or n.endswith('.node') for n in payload.getnames())
         cfg = json.loads(payload.extractfile('dsm/config').read())
         assert cfg['.url']['org.nasconnector.dashboard']['allUsers'] is False
+        assert cfg['.url']['org.nasconnector.dashboard']['url'] == '/webman/3rdparty/SynologyNASConnector/index.html'
 subprocess.run(['python3',str(ROOT/'scripts/build-spk.py')],check=True,cwd=ROOT)
 assert spk.read_bytes() == original, 'SPK must be reproducible with the same inputs'
 print('SPK structure, scripts, privileges, checksum and reproducibility verified')
