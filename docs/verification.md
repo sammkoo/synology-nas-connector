@@ -1,6 +1,6 @@
 # Verification record
 
-Latest local verification: **2026-10-01** (MCP authentication and ChatGPT connection instructions rechecked 2026-10-01; other references fetched 2026-09-30). Local host: macOS arm64. Target runtime additionally exercised using **Node.js v22.23.3** from the npm Node runtime package; host Node.js v23.7.0 was used during initial development. This is a developer-preview validation record, not a NAS compatibility certification.
+Latest local verification: **2026-10-01** (MCP authentication, ChatGPT connection, Sign in with ChatGPT and Secure MCP Tunnel instructions rechecked 2026-10-01; other references fetched 2026-09-30). Local host: macOS arm64. Target runtime additionally exercised using **Node.js v22.23.3** from the npm Node runtime package; host Node.js v23.7.0 was used during initial development. This is a developer-preview validation record, not a NAS compatibility certification.
 
 | Check | Observed result |
 | --- | --- |
@@ -38,4 +38,10 @@ Latest local verification: **2026-10-01** (MCP authentication and ChatGPT connec
 
 - Build `0005` integrates NAS pairing and relay into the DSM service. `tests/connection.test.ts` adds thirteen scenarios: private-credential isolation, administrator/proof binding, real reads after restart, changed policy before/after approval, substituted issuer/key/label/roots, stale comparison proof, lost-response recovery after explicit approval, missing/replaced/unsafe identity, offline disconnect/restart revocation, issuer/key/device/nonce/timestamp signature rejection, re-pair device binding, public-only DNS/rebinding checks, TLS/redirect/response bounds, expected device ID and signed management routing. Package migration preserves connection/key files. NAS build assertions reject gateway SQLite imports. Its [Linux CI run 36796866749](https://github.com/sammkoo/synology-nas-connector/actions/runs/36796866749) passed for exact commit `e6860f152602cb90771c0c7edbc68558066a5456`: 85 tests on Node.js 22/24, both bundle checks, dependency audit, reproducible SPK and Docker NAS/gateway TLS/restart checks. The Linux and local SPK are byte-identical at SHA-256 `1dc2c99e7002892e5a9d3315a2a24d8628f5b50dd17b0f7a0c22416933749142`.
 
-Run the recorded commands again on changes. The real-device release checklist is in `installation.md`. Artifacts and private local configuration are ignored by Git; no secrets or NAS documents are needed to rerun tests.
+## Published preview distribution
+
+[Release v0.1.0-preview.5](https://github.com/sammkoo/synology-nas-connector/releases/tag/v0.1.0-preview.5) is a public prerelease at exact commit `65b3d16145e2230b15161feb157f4c20a17a31a4`. Its [CI run 36797642592](https://github.com/sammkoo/synology-nas-connector/actions/runs/36797642592) passed Linux Node.js 22/24 and Docker checks. This commit updates the installation documentation; the runtime remains the build 0005 implementation described above.
+
+All four release assets were downloaded back and compared byte-for-byte with the staged deliverables. The SPK SHA-256 remains `1dc2c99e7002892e5a9d3315a2a24d8628f5b50dd17b0f7a0c22416933749142`. The source ZIP SHA-256 is `91399591b0747f18c657c2bee994090f4de100da6921e55030604817bf44b277`; its 101 files match the tagged source and exclude dependencies, generated output and private local configuration. The release includes the SPK checksum and a checksum manifest for the SPK and source ZIP. Publication and download integrity do not establish real DSM or ChatGPT compatibility.
+
+Run the recorded commands again on runtime changes. The real-device release checklist is in `installation.md`. Artifacts and private local configuration are ignored by Git; no secrets or NAS documents are needed to rerun tests.

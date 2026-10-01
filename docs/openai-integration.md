@@ -1,6 +1,6 @@
 # OpenAI integration evidence
 
-Verified against fetched official documentation on **2026-09-30**, with MCP authentication rechecked **2026-10-01**. Capabilities and rollout may change; follow these sources before enabling a production integration. This connector is an MCP server and does not call the OpenAI inference API.
+Verified against fetched official documentation on **2026-09-30**, with MCP authentication, Sign in with ChatGPT and Secure MCP Tunnel rechecked **2026-10-01**. Capabilities and rollout may change; follow these sources before enabling a production integration. This connector is an MCP server and does not call the OpenAI inference API.
 
 ## MCP access to NAS data
 
@@ -18,9 +18,22 @@ The website route was rechecked: it is a limited trial for selected commercial p
 
 ## Network path and distribution
 
-The current [MCP server build guide](https://developers.openai.com/plugins/build/mcp-server) and [Secure MCP Tunnel guide](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels) are references for the next phase. Direct remote access requires an approved reachable deployment; the implemented relay's ownership, data transit and operational design is recorded in [relay documentation](relay.md). Supported private tunnel availability still needs deployment-specific verification. OAuth identity does not open NAT or pair a device automatically. No universal availability, directory approval or automatic Package Center distribution is assumed.
+The current [MCP server build guide](https://developers.openai.com/plugins/build/mcp-server) is a reference for deployment. Direct remote access requires an approved reachable deployment; the implemented relay's ownership, data transit and operational design is recorded in [relay documentation](relay.md). OAuth identity does not open NAT or pair a device automatically. No universal availability, directory approval or automatic Package Center distribution is assumed.
 
 The current relay terminates TLS at the gateway, which can see returned documents in memory. It is not end-to-end encrypted and does not persist or log document bodies. Actual hosting must enforce the documented logging/retention policy and transport/resource limits before enabling household NAS connections.
+
+### Optional private testing through Secure MCP Tunnel
+
+The [official tunnel guide](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels) supports private developer-mode testing through outbound HTTPS. Public plugin distribution still requires a stable public HTTPS MCP endpoint. The connector does not bundle, configure or run `tunnel-client`; no tunnel connection has been tested for this project.
+
+Before choosing this separate test path, verify:
+
+- A Platform organization grants Tunnels **Read + Manage** for creation and **Read + Use** for operation.
+- The tunnel is associated with the intended ChatGPT workspace; developer-mode permission is separate.
+- An approved runtime API key and `tunnel_id` are available. Keep the key out of DSM forms, source and logs.
+- The client can reach the private MCP server locally and OpenAI over outbound HTTPS on port 443.
+
+Use the official client download and its current `help quickstart` and `doctor` instructions. Keep its administration UI on loopback. OAuth discovery can travel through the tunnel, but the browser-facing authorization server is not automatically tunneled. Do not remove existing authentication to work around reachability. Tunnel transport does not exempt app invocations from normal product logging. This option needs its own authentication and end-to-end validation before it can be recommended to users.
 
 ## Current connection instructions (rechecked 2026-10-01)
 
