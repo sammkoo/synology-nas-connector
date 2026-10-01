@@ -14,7 +14,7 @@ export function requireAdministrator(username: string, groups: string) {
 export function bridgeAction(env: NodeJS.ProcessEnv) {
   const query = new URLSearchParams(env.QUERY_STRING ?? '');
   const action = query.get('action');
-  if ([...query.keys()].length !== 1 || !['bootstrap','roots','preview'].includes(action ?? ''))
+  if ([...query.keys()].length !== 1 || !['bootstrap','roots','preview','pair-begin','pair-status','pair-confirm','pair-cancel','pair-disconnect'].includes(action ?? ''))
     throw new ManagementError('UNKNOWN_ACTION',404);
   const method = action === 'bootstrap' ? 'GET' : 'POST';
   if (env.REQUEST_METHOD !== method) throw new ManagementError('METHOD_NOT_ALLOWED',405);

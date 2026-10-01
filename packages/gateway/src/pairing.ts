@@ -1,16 +1,13 @@
 import { createPublicKey,createHash,randomBytes,randomUUID,verify } from 'node:crypto';
 import { InvalidGrantError,InvalidRequestError } from '@modelcontextprotocol/sdk/server/auth/errors.js';
 import { GatewayOAuthProvider } from './oauth.js';
+import { pairingApprovalMessage,deviceRevocationMessage,type DeviceRevocation } from '../../relay/src/pairing-protocol.js';
+export { pairingApprovalMessage,type PairingProof } from '../../relay/src/pairing-protocol.js';
 
 type Pair={publicKey:string;label:string;rootIds:string[];challenge:string;userCodeKey:string;expires:number;
   browserKey?:string;comparison?:string;requestedSubject?:string;deviceId?:string;subject?:string;approved?:boolean;consumed?:boolean};
 type Identity={subject:string;deviceId:string;publicKey:string};
 const value=()=>randomBytes(32).toString('base64url');
-/** Sign this exact byte sequence only after a DSM administrator compares both screens. */
-export type PairingProof={issuer:string;publicKey:string;label:string;rootIds:string[];challenge:string;browserKey:string;comparison:string};
-export function pairingApprovalMessage(proof:PairingProof) {
-  return Buffer.from(JSON.stringify(['nas-pairing-v1',proof.issuer,proof.publicKey,proof.label,[...proof.rootIds].sort(),proof.challenge,proof.browserKey,proof.comparison]));
-}
 export class DevicePairing {
   constructor(private readonly oauth:GatewayOAuthProvider) {}
   private get store(){return this.oauth.store;}
@@ -111,5 +108,19 @@ export class DevicePairing {
     const identity=this.store.get<Identity>('device-identity',this.identityKey(publicKey));
     if(!identity||!this.oauth.deviceIsActive(identity.deviceId,identity.subject))throw new InvalidGrantError('Device is not paired');
     return {...identity};
+  }
+  /** Private-key authorization for NAS-side disconnect, independent of browser cookies. */
+  revokeFromNas(request:DeviceRevocation) {
+    return this.store.transaction(()=>{
+      if(Math.abs(this.store.now()-request.timestamp)>60000)throw new InvalidGrantError('Device confirmation expired');
+      const known=this.store.get<Identity>('device-identity',this.identityKey(request.publicKey));
+      if(!known||known.deviceId!==request.deviceId||!verify(null,deviceRevocationMessage(this.oauth.issuer,request),this.key(request.publicKey),Buffer.from(request.signature,'base64url')))
+        throw new InvalidGrantError('NAS revocation proof is invalid');
+      const key=this.store.key('device-revoke',request.nonce);
+      if(this.store.get('device-revoke',key))throw new InvalidGrantError('NAS revocation replay');
+      if(this.store.count('device-revoke')>=10000)throw new InvalidGrantError('NAS revocation capacity');
+      this.oauth.revokeDevice(known.deviceId,known.subject);
+      this.store.put('device-revoke',key,{used:true},this.store.now()+120000);return {revoked:true as const};
+    });
   }
 }

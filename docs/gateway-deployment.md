@@ -1,6 +1,6 @@
 # Running the gateway service
 
-The gateway now has a native CLI, a portable bundle and a dedicated Docker target. It serves OAuth discovery/protocol, first-party browser consent, pairing and the protected MCP resource, and accepts outbound NAS channels. This is an operator deployment preview. The DSM package still needs its agent/pairing controls; a running gateway is not proof of a completed ChatGPT connection.
+The gateway now has a native CLI, a portable bundle and a dedicated Docker target. It serves OAuth discovery/protocol, first-party browser consent, pairing and the protected MCP resource, and accepts outbound NAS channels. This is an operator deployment preview. Build 0005 adds DSM agent/pairing controls; a running gateway is not proof of a completed ChatGPT connection. Real DSM authentication and approved public hosting still need validation.
 
 Use a tested Node.js 22.18+ or Node.js 24 runtime. The gateway alone uses `node:sqlite`; the NAS bundle does not import it. OpenSSL is needed for development TLS tests, not for the shipped gateway process. Run one gateway process per private state directory on a local filesystem with SQLite locking. Network filesystem state and multiple replicas are unsupported.
 

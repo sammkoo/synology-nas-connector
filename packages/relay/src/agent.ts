@@ -7,7 +7,7 @@ import { MAX_RELAY_BYTES,RELAY_PROTOCOL,rootsSchema,relayProofMessage,encodeRela
 
 export type AgentState='stopped'|'connecting'|'online'|'offline';
 export type NasRelayOptions={issuer:string;privateKey:KeyObject;source:ReadOnlyFileProvider;
-  trust?:{ca?:WebSocket.ClientOptions['ca'];lookup?:LookupFunction};onState?:(state:AgentState)=>void;maxConcurrent?:number};
+  expectedDeviceId?:string;trust?:{ca?:WebSocket.ClientOptions['ca'];lookup?:LookupFunction};onState?:(state:AgentState)=>void;maxConcurrent?:number};
 export class NasRelayAgent {
   readonly publicKey:string;state:AgentState='stopped';deviceId?:string;
   private socket?:WebSocket;private shutdown?:AbortController;private loop?:Promise<void>;
@@ -46,6 +46,7 @@ export class NasRelayAgent {
               const roots=rootsSchema.parse(this.current().listRoots());manifest=JSON.stringify(roots);
               send({type:'proof',roots,signature:sign(null,relayProofMessage(challenge,this.publicKey,roots),this.options.privateKey).toString('base64url')});
             }else if(message.type==='ready'&&challenge&&message.id===challenge.id){
+              if(this.options.expectedDeviceId&&message.deviceId!==this.options.expectedDeviceId)throw new Error('Paired device identity changed');
               ready=true;settled=true;clearTimeout(handshake);this.deviceId=message.deviceId;this.status('online');resolve();
               policyTimer=setInterval(()=>{
                 try{const roots=rootsSchema.parse(this.current().listRoots()),next=JSON.stringify(roots);if(next!==manifest){send({type:'policy',roots});manifest=next;}}catch{ws.terminate();}

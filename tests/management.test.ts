@@ -127,6 +127,9 @@ test('package management migration preserves selected folders and MCP token on r
     const before={roots:[{id:'docs',path:'/volume1/Documents',label:'Documents'}],http:{host:'127.0.0.1',tokenFile:'token'}};
     await writeFile(filename,JSON.stringify(before),{mode:0o600});
     await writeFile(path.join(directory,'token'),'existing-token',{mode:0o600});
+    await mkdir(path.join(directory,'relay'),{mode:0o700});
+    await writeFile(path.join(directory,'relay','identity.key'),'existing-private-NAS-key',{mode:0o600});
+    await writeFile(path.join(directory,'relay','connection.json'),'existing-private-connection',{mode:0o600});
     execFileSync(process.execPath,['scripts/enable-management.mjs',directory]);
     const after=JSON.parse(await readFile(filename,'utf8'));
     assert.deepEqual(after.roots,before.roots);assert.deepEqual(after.http,before.http);
@@ -135,5 +138,7 @@ test('package management migration preserves selected folders and MCP token on r
     execFileSync(process.execPath,['scripts/enable-management.mjs',directory]);
     assert.equal(await readFile(path.join(directory,'management-secret'),'utf8'),key);
     assert.equal(await readFile(path.join(directory,'token'),'utf8'),'existing-token');
+    assert.equal(await readFile(path.join(directory,'relay','identity.key'),'utf8'),'existing-private-NAS-key');
+    assert.equal(await readFile(path.join(directory,'relay','connection.json'),'utf8'),'existing-private-connection');
   } finally {await rm(directory,{recursive:true,force:true});}
 });

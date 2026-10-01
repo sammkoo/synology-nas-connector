@@ -7,6 +7,7 @@ import { gatewayBrowserRouter } from './browser.js';
 import { GatewayEdgeGuard,type GatewayEdgeOptions } from './edge.js';
 import { GatewayRelay } from './relay.js';
 import { gatewayMcpRouter } from './mcp.js';
+import { deviceRevocationSchema } from '../../relay/src/pairing-protocol.js';
 export type { GatewayEdgeOptions } from './edge.js';
 
 /** Gateway control-plane app. The MCP relay must be attached before deployment. */
@@ -35,6 +36,7 @@ export function createGatewayApp(oauth:GatewayOAuthProvider,edge:GatewayEdgeOpti
   agent.post('/approve',(req,res)=>{
     const input=code.extend({signature:z.string().regex(/^[A-Za-z0-9_-]{86}$/)}).parse(req.body);res.json(pairing.approve(input.deviceCode,input.signature));
   });
+  agent.post('/revoke',(req,res)=>{res.json(pairing.revokeFromNas(deviceRevocationSchema.parse(req.body)));});
   agent.use((e:{status?:number},_req:express.Request,res:express.Response,_next:express.NextFunction)=>{res.status(e.status===413?413:400).json({error:'pairing_request_failed'});});
   app.use('/agent/pair',agent);
   if(relay)app.use(gatewayMcpRouter(oauth,relay));

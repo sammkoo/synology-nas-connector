@@ -1,29 +1,45 @@
 # Architecture
 
-The NAS filesystem is the source of truth. Local directories and Synology mounted shares use the same `NasFiles` adapter. The process never logs into DSM: a DSM package runs under its own unprivileged package account and administrators grant that account read permissions to selected folders. Configuration is separate from the share data.
+The NAS filesystem is the source of truth. Local directories and Synology mounted shares share the same `NasFiles` adapter. The service runs as an unprivileged DSM package account; administrators grant that account read permissions. Configuration and private connection state stay outside selected shares.
 
 ```mermaid
 flowchart LR
-  A[Local MCP client] -->|stdio| B[MCP server]
-  C[Self-hosted client] -->|HTTP and local bearer token| B
-  D[Dashboard] -->|authenticated status request| B
-  B --> E[Root policy and bounded filesystem core]
+  A[Local MCP client] -->|stdio or local bearer HTTP| B[NAS MCP server]
+  D[DSM administrator UI] -->|session-verified CGI and signed loopback actions| M[NAS management service]
+  M -->|replace current folder policy| E[Read-only filesystem core]
+  M -->|confirmed pairing and private identity| N[Outbound NAS agent]
+  B --> E
+  N -->|WSS with signed key proof| G[HTTPS gateway]
+  C[ChatGPT MCP client] -->|scoped OAuth and Streamable HTTP| G
+  G -->|device-bound read-only calls| N
+  N --> E
   E --> F[Selected local folders or NAS shares]
-  G[Future OAuth adapter] -.-> B
-  H[Future outbound relay] -.-> B
 ```
 
-`packages/core` handles root aliases, path validation, denied entries, bounded filename scans and document reads. It has no transport, DSM API, identity provider, shell command or write operation. Config is schema-validated and snapshotted at process startup. Empty roots are valid and expose no data. The server bundle contains no native modules and runs under a separate Node.js v22 DSM dependency.
+## Core and local transports
 
-`apps/server` registers exactly five tools with MCP read-only annotations. HTTP uses a fresh SDK server/transport for each request, avoiding shared session identity and request-ID collisions. Stdio uses one server per local process. HTTP authenticates before JSON parsing, checks Host and Origin, restricts body size, and limits concurrency and a global request rate. `GET /healthz` discloses only liveness. `GET /api/status` requires authentication. No filesystem configuration is changed through HTTP.
+`packages/core` owns aliases, validation, denied entries, bounded filename scans, metadata and UTF-8 reads. It has no DSM API, transport, identity provider, shell execution or write tool. Strict operation schemas are shared with the relay. Empty roots expose no data. The portable NAS bundle has no native modules or gateway SQLite dependency and runs on Node.js v22.
 
-`packages/auth` separates the transport from identity. `Authenticator` resolves a credential to a principal with `nas:read` and optional root IDs; MCP checks those root IDs before executing. Local tokens are generated from 32 random bytes and loaded from an owner-only file. In local-token mode no OAuth discovery is advertised. The metadata helper is a future configuration contract, not a working OAuth implementation.
+`apps/server` exposes exactly five tools with read-only annotations. HTTP creates an SDK server/transport for each request; stdio uses one server for the spawning process. Local HTTP authenticates before JSON parsing, checks Host/Origin and limits input, concurrency and rates. Its health endpoint exposes liveness only; status requires auth. `packages/auth` resolves credentials to principals and every tool checks scope/optional root grants. Local tokens are private random secrets, with no OAuth metadata in local-token mode.
 
-## Later phases
+## DSM management and NAS connection
 
-1. Implement a complete MCP OAuth provider or integrate an established provider, with PKCE S256, resource/audience binding, issuer verification, expiry, root grants and revocation. Authenticate each HTTP request and publish protected-resource metadata only with a working provider.
-2. Evaluate Sign in with ChatGPT as a separate identity flow. The current open-source loopback flow needs a browser-local callback; NAS deployments need a verified hosted identity option or a browser-local companion. An OpenAI token must never become a NAS authorization credential by accident.
-3. Add optional device pairing and an outbound authenticated relay. Device keys, account/root grants, per-device quotas and token revocation must be designed before enabling it. A relay sees plaintext if it terminates TLS; do not claim end-to-end encryption. Retention and audit policy need explicit documentation.
-4. Add a DSM-specific configuration editor only after DSM session/CSRF authentication is implemented. v0.1 uses administrator-edited config and an authenticated status dashboard.
+`packages/management` separates configuration writes from data operations. The CGI verifies the existing DSM session and exact administrator group, then signs a fixed loopback request using a separate private HMAC key. Mutation actions require exact HTTPS Origin and administrator-bound CSRF. Neither the NAS bearer token nor a browser-supplied username grants management access.
 
-There is no background content indexing, database, cloud relay, OpenAI inference call or automatic plugin registration in v0.1. Future work is isolated at adapters rather than embedded into file access.
+The share catalog discovers permitted top-level shares and returns opaque IDs. Atomic private configuration writes publish a replacement filesystem provider; operations discard results when that provider changes. The connection controller uses that same live provider. Explicit destination consent and unchanged provider bind each pending pairing to its initiating administrator. The browser sees public pairing/comparison codes, not private polling credentials, signed proof material or the NAS key.
+
+Confirmed pairing persists a private Ed25519 identity plus gateway/device state. Only then does the agent start. Startup validates existing private state and key identity; it never silently replaces a missing paired key. Gateway HTTP/WSS destinations use public-only DNS validation and pinned lookup answers, HTTPS/WSS certificate verification and no redirects. Disconnect stops the agent, persists disabled state and sends a signed timestamp/nonce-bound gateway revocation. Offline revocation remains pending. See [DSM flow and recovery](dsm-management.md).
+
+## Gateway and authorization
+
+`packages/gateway` owns the separate private SQLite store, MCP OAuth authorization-code/PKCE protocol, resource binding, durable first-party browser sessions, NAS ownership pairing and folder consent. The gateway's own installation key binds persistent authorization state. Its native CLI or Docker target supplies TLS/listener limits, private initialization, graceful shutdown and health checks; it is never bundled inside the SPK.
+
+`packages/relay` supplies the pure pairing/protocol contracts, private NAS identity, public-only gateway client and outbound agent. The gateway binds each authenticated channel to a verified device and principal; callers cannot choose an arbitrary NAS by submitted identifier. Both gateway and NAS enforce folder scope and validate results. Cancellation, policy changes and grant/device revocation discard in-flight content. See [relay bounds and privacy](relay.md).
+
+TLS terminates at the gateway, which sees requested file data in memory. It does not persist/log document bodies; operator hosting must uphold that policy. This is not E2E encryption. There is no content index, file modification tool, OpenAI inference call or automatic plugin registration.
+
+## Remaining integration gates
+
+Sign in with ChatGPT is a separate identity route and remains unimplemented. The supported loopback flow reaches the browser's computer, not a remote NAS; any hosted route needs official eligibility and exact callback validation. OpenAI inference credentials never become NAS authorization credentials.
+
+Real DSM authentication/ACLs, installation/upgrade/reboot, approved public hosting and real ChatGPT discovery/consent/read/revocation remain required. The [product acceptance record](product-plan.md) distinguishes implemented components and fixture evidence from these release gates.

@@ -1,30 +1,44 @@
-# DSM management preview (package build 0002)
+# DSM setup and gateway pairing (package build 0005)
 
-This build adds graphical shared-folder selection and a read-only access check. It is a development build pending real-device validation of CGI execution permissions. ChatGPT OAuth and pairing remain under development. Do not present this build as a finished connector.
+This developer build provides folder selection, access checks, gateway pairing, connection status and disconnection. The backend is covered by actual HTTPS/WSS tests. Real DSM CGI executor/session permissions, installation, upgrade and reboot still require hardware validation; do not describe this as a finished consumer release.
 
-Open the app in Package Center while signed in as a DSM administrator. The launcher uses `/webman/3rdparty/SynologyNASConnector/index.html`. Build 0001 omitted `/webman`, resulting in a 404 even though the service was running; this was reproduced on DS224+ / DSM 7.4.1-90080 and the correct URL was verified on that device.
+Open the app in Package Center while signed in as a DSM administrator. The launcher uses `/webman/3rdparty/SynologyNASConnector/index.html`. Build 0001 omitted `/webman`, producing a 404 even though its service was running; this was reproduced on DS224+ / DSM 7.4.1-90080 and the correct URL was verified on that device. This observation does not prove the new CGI bridge works there.
 
-## Setup flow
+## Setup
 
-1. Select shared folders and save. No folders are enabled by default. Only discovered top-level shares on `/volume1` through `/volume16` are selectable. USB/network mounts are not supported by this initial selector.
-2. If a folder is unavailable, grant **read-only** access to the `SynologyNASConnector` system internal user through DSM's Shared Folder permissions dialog. Refresh the app. The package never changes ACLs itself.
-3. Choose a selected folder and use **Check folder** to confirm directory access. The check shows at most ten entries, never document contents.
-4. Deselect folders and save to revoke access. The live MCP service observes the new policy without a restart. An in-progress tool result is discarded if its policy changed before completion.
+1. Select shared folders and save. No folders are enabled by default. Only discovered top-level shares on `/volume1` through `/volume16` are selectable; USB/network mounts are outside this selector.
+2. For an unavailable folder, grant **read-only** access to the `SynologyNASConnector` system internal user in Control Panel → Shared Folder → Edit → Permissions → System internal user. Refresh the app. The package never changes ACLs itself.
+3. Use **Check folder** to confirm access. This shows at most ten entry names and no document contents.
+4. Deploy or obtain an approved [gateway](gateway-deployment.md). Enter its public HTTPS origin in **Connect your NAS**, choose a label and read the data-transit consent. Do not enter a DSM address, password, API key or bearer token. Local/private/reserved gateway destinations are rejected; TLS certificate checks cannot be disabled in the UI.
+5. Select **Pair NAS**. Open the displayed gateway link and type the public pairing code there. It expires in ten minutes. On both pages compare the six-digit number, then select **Both numbers match** in DSM only if the numbers agree. Finish the gateway page. The private polling credential and NAS key remain on the NAS. If the approval response is lost, subsequent polling can recover that pairing only after the administrator has explicitly confirmed the matching proof.
+6. Once the NAS status is **connected**, the app displays the gateway `/mcp` URL and a link to [current OpenAI connection instructions](https://developers.openai.com/apps-sdk/deploy/connect-chatgpt). Developer mode/workspace availability and the exact OAuth callback must be checked with the real client. ChatGPT's authorization page on the gateway asks for a specific NAS and folders; folder boxes start unchecked.
 
-The account-linking step accurately reports that ChatGPT linking is not ready. The UI does not ask users for a NAS password, MCP token or OpenAI API key.
+NAS ownership pairing signs in to this gateway using its NAS identity. It is separate from OpenAI identity. **Sign in with ChatGPT is not implemented**. No public directory acceptance, universal account availability or completed real ChatGPT connection is claimed.
+
+The gateway terminates TLS and can see requested filenames, metadata and text. It stores ownership/policy/grant state but the implementation does not persist or log document contents. Only trust an operator whose hosting/logging policy you approve. The connector keeps originals read-only; requested contents travel to the client.
+
+## Change access or disconnect
+
+Deselect folders and save to remove access immediately in the local service. The relay applies the same live policy; a source change discards in-progress reads. Removing a folder narrows gateway grants. Re-adding it requires fresh consent. Changing folders during pairing invalidates that pending pairing.
+
+**Disconnect NAS and revoke access** stops the outbound connection, durably disables restoration and sends a signed revocation request to the gateway. If the gateway is offline, the status explicitly shows pending revocation. The NAS remains disconnected; use **Retry gateway revocation** or restart the service once the gateway is reachable. Previously issued grants cannot read from an offline NAS and are invalidated when revocation succeeds. Re-pairing after revocation creates a new device ID, so old signatures and grants cannot authorize it.
+
+A paired NAS automatically reconnects on service restart/upgrade using its saved key and exact device ID. Back up private `var/relay/identity.key` and `var/relay/connection.json` consistently; never post them in an issue. Missing/replaced keys, unsafe permissions or corrupt state prevent restoration and surface a connection error. The package does not silently regenerate a paired identity. A fresh unpaired installation creates no identity until explicit pairing.
+
+If saving connection state fails, pairing stops and attempts revocation. If disconnection cannot replace or remove the saved record, `DISCONNECT_NOT_PERSISTED` warns that a restart could revive old enabled state. Resolve storage errors before restarting; do not broaden private key permissions. No claim of durable revocation is made on a failed write.
 
 ## Authentication and isolation
 
-The same-origin CGI bridge directly executes DSM's documented `authenticate.cgi`, then runs `/usr/bin/id -Gn` with an argument array and requires exact membership in `administrators`. An empty, invalid or unavailable DSM identity fails closed. This path needs hardware testing; the implementation does not invent an alternative authentication bypass if DSM changes its behavior.
+The same-origin CGI directly executes DSM's documented `authenticate.cgi`, then `/usr/bin/id -Gn` with an argument array and requires exact membership in `administrators`. Empty, invalid or unavailable DSM identity fails closed. Hardware testing must establish the actual CGI execution identity; no guessed authentication bypass is provided.
 
-The bridge forwards only a fixed management action and the authenticated username to the loopback service. DSM cookies stay inside the authentication process and are not forwarded. A separate private HMAC key signs method, path, user, timestamp, nonce, CSRF token and body digest. The service rejects remote callers, signatures older than 15 seconds and replayed nonces. Writes also require a user-bound expiring CSRF token. The CGI independently requires the exact HTTPS Origin on mutations, even if optional DSM CSRF settings are disabled.
+The bridge forwards only fixed management actions and the authenticated username to loopback. DSM cookies stay in the authentication process. A separate private HMAC key signs method, path, user, timestamp, nonce, CSRF token and body hash. The service rejects remote callers, signatures older than fifteen seconds and replayed nonces. POST actions additionally require a user-bound expiring CSRF token; the CGI requires the exact HTTPS Origin independently of DSM's optional CSRF settings.
 
-Only config writes are allowed. Browser requests contain opaque share IDs, not filesystem paths. Configuration updates serialize, reject stale revisions and replace a private file atomically. The MCP bearer token cannot access management routes. If the CGI execution user cannot read the private management key or authenticate the DSM session, setup reports unavailable; do not broaden secret permissions as a workaround.
+Browser requests carry opaque share IDs rather than filesystem paths. Root and connection writes serialize, use private files and reject stale state. Pairing is bound to its initiating administrator, immutable proof and unchanged folder provider. Any verified administrator can disconnect an existing connection. The MCP bearer token never grants management access. If the CGI cannot read its private key or authenticate DSM, do not broaden secret permissions as a workaround.
 
-Package upgrade adds a separate private management key and config option while preserving existing MCP credentials and roots. Both migration and file policy revocation have regression tests. The service must remain bound to `127.0.0.1` when DSM management is enabled.
+Package upgrades preserve roots, local token, management key, NAS identity and connection record. The service stays on `127.0.0.1` with management enabled. Public access is through the optional outbound relay; opening DSM or the local service to the internet is unnecessary.
 
-## Device validation still required
+## Required device checks
 
-Install/update build 0002 on a test NAS, verify administrator and non-administrator sessions, unauthorized cross-origin POST rejection, package-user ACL behavior, root selection, revocation, reboot and upgrades. Inspect CGI executor identity and runtime paths through authorized diagnostics before making any packaging privilege changes. Do not upload cookies, keys, private log contents or household domain/IP information to the public repository.
+Validate administrator/non-administrator sessions, cross-origin POST rejection, package-user ACLs, folder selection/revocation, pairing and comparison, actual gateway reads, offline disconnection, restart/reboot and upgrade. Confirm runtime paths and CGI executor identity through authorized diagnostics before changing package privileges. Keep household addresses, cookies, keys and NAS documents out of the public repository.
 
 Reference: [Synology web authentication guide](https://help.synology.com/developer-guide/integrate_dsm/web_authentication.html).

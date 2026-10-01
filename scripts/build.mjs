@@ -5,7 +5,9 @@ await mkdir('dist', {recursive: true});
 await build({entryPoints:['apps/dsm-bridge/src/cgi.ts'],outfile:'dist/dsm-bridge.cjs',bundle:true,
   platform:'node',target:'node22',format:'cjs',legalComments:'eof'});
 const result = await build({entryPoints: ['apps/server/src/cli.ts'], outfile: 'dist/server.cjs', bundle: true,
-  platform: 'node', target: 'node22', format: 'cjs', sourcemap: false, legalComments: 'eof', metafile: true});
+  platform: 'node', target: 'node22', format: 'cjs', sourcemap: false, legalComments: 'eof', metafile: true,external:['bufferutil','utf-8-validate']});
+if(Object.keys(result.metafile.inputs).some(p=>p.startsWith('packages/gateway/'))||result.metafile.outputs['dist/server.cjs'].imports.some(p=>p.path==='node:sqlite'))
+  throw new Error('Gateway-only SQLite must never enter the NAS bundle');
 const gateway = await build({entryPoints:['apps/gateway/src/cli.ts'],outfile:'dist/gateway.cjs',bundle:true,
   platform:'node',target:'node22',format:'cjs',legalComments:'eof',metafile:true,external:['bufferutil','utf-8-validate']});
 async function writeNotices(metafile,filename) {

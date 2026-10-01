@@ -4,7 +4,7 @@ import { loadConfig, NasFiles } from '../../../packages/core/src/index.js';
 import { localTokenAuthenticator, NAS_READ_SCOPE } from '../../../packages/auth/src/index.js';
 import { createMcpServer } from './mcp.js';
 import { createHttpApp } from './http.js';
-import { BridgeGuard, ConfigurationStore, readManagementSecret, ShareCatalog } from '../../../packages/management/src/index.js';
+import { BridgeGuard, ConfigurationStore, readManagementSecret, ShareCatalog,NasConnectionController } from '../../../packages/management/src/index.js';
 import { managementRouter } from './management.js';
 
 async function main() {
@@ -26,19 +26,23 @@ async function main() {
     const uiDir = process.env.NAS_CONNECTOR_UI_DIR ?? path.resolve('apps/dsm-ui/public');
     let source: NasFiles | (() => NasFiles) = files;
     let management;
+    let connection:NasConnectionController|undefined;
     if (config.management) {
       if (config.http.host !== '127.0.0.1') throw new Error('Management requires loopback binding');
       const secretPath = path.resolve(path.dirname(configPath),config.management.secretFile);
       const store = await ConfigurationStore.create(path.resolve(configPath),config,ShareCatalog.dsm());
-      management = managementRouter(store,new BridgeGuard(await readManagementSecret(secretPath)));
+      connection=new NasConnectionController(path.resolve(path.dirname(configPath),'relay'),()=>store.getFiles());
+      await connection.restore();
+      management = managementRouter(store,new BridgeGuard(await readManagementSecret(secretPath)),connection);
       source = () => store.getFiles();
     }
     const app = createHttpApp(config, source, auth, uiDir, management);
     const listener = app.listen(config.http.port, config.http.host, () => console.error('NAS connector started (read-only)'));
     listener.requestTimeout = 15000;
     listener.headersTimeout = 10000;
-    listener.on('error', () => {console.error('HTTP_LISTEN_FAILED'); process.exitCode = 1;});
+    listener.on('error', () => {console.error('HTTP_LISTEN_FAILED'); process.exitCode = 1;void connection?.stop();});
     for (const signal of ['SIGTERM', 'SIGINT'] as const) process.once(signal, () => {
+      void connection?.stop();
       listener.close(() => process.exit(0));
       setTimeout(() => {listener.closeAllConnections(); process.exit(0);}, 5000).unref();
     });

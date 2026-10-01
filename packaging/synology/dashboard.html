@@ -3,12 +3,26 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'">
 <title>Synology NAS Connector</title><link rel="stylesheet" href="style.css"><script src="app.js" defer></script></head>
 <body><main><header><p class="eyebrow">YOUR FILES · YOUR CHOICE</p><h1>Synology NAS Connector</h1>
-<p>Let ChatGPT read only the folders you choose. Your files stay on your NAS.</p><span class="pill">Read only</span></header>
+<p>Let ChatGPT read only the folders you choose. The connector never changes your files.</p><span class="pill">Read only</span></header>
 <p id="notice" role="status" aria-live="polite">Checking your DSM session…</p>
 <section><h2>1. Choose folders</h2><p>No folders are shared until you select and save them. You can remove access here at any time.</p>
 <form id="folders"><div id="shares"></div><button id="save" type="submit" disabled>Save folder selection</button></form>
 <p id="permissions" hidden>For unavailable folders, open Control Panel → Shared Folder → Edit → Permissions → System internal user. Give SynologyNASConnector read-only access to those folders, then refresh this page.</p></section>
-<section><h2>2. Connect ChatGPT</h2><p id="connection">ChatGPT account linking is being built. This preview cannot connect your account yet.</p></section>
+<section><h2>2. Connect your NAS</h2><p id="connection" role="status">Choose folders first, then pair with a gateway you trust.</p>
+<form id="pairing-form"><label for="gateway">Gateway address</label><input id="gateway" type="url" placeholder="https://connector.example.com/" maxlength="2048" required autocomplete="off">
+<p class="muted">Use the public HTTPS address provided by your gateway operator. Do not enter your DSM address. This preview requires a separately deployed gateway.</p>
+<label for="nas-label">Name for this NAS</label><input id="nas-label" value="My NAS" maxlength="100" required>
+<label class="check"><input id="gateway-consent" type="checkbox" required> I trust this gateway to receive folder names and file contents requested by ChatGPT from the folders I select.</label>
+<button id="pair-begin" disabled>Pair NAS</button></form>
+<div id="pairing" hidden><p>Open the gateway below and enter this pairing code. It expires in ten minutes.</p><p class="pair-code" id="user-code"></p>
+<a id="verification" target="_blank" rel="noopener noreferrer">Open gateway</a>
+<div id="comparison-panel" hidden><p>Compare this number with the number shown by the gateway. Confirm only if both numbers match.</p><p class="pair-code" id="comparison"></p>
+<button id="pair-confirm">Both numbers match</button></div><button id="pair-cancel" type="button" class="secondary">Cancel pairing</button></div>
+<div id="connected" hidden><p id="connected-label"></p><p id="remote-revocation" hidden>The NAS is disconnected. Gateway revocation is pending; retry when the gateway is available. Existing gateway grants cannot read files from this disconnected NAS.</p>
+<button id="pair-disconnect" type="button" class="secondary">Disconnect NAS and revoke access</button>
+<div id="chatgpt-instructions" hidden><h3>Add to ChatGPT</h3><p>Use this MCP server address:</p><p><code id="mcp-url"></code></p>
+<p>Follow <a href="https://developers.openai.com/apps-sdk/deploy/connect-chatgpt" target="_blank" rel="noopener noreferrer">OpenAI’s connection instructions</a>. Developer mode and workspace permission may be required. Review the selected NAS and folders on the gateway when ChatGPT opens the authorization page.</p>
+<p class="muted">NAS pairing signs you in to the gateway using your NAS identity. “Sign in with ChatGPT” is not implemented. Public directory distribution and a real ChatGPT connection still require validation.</p></div></div></section>
 <section><h2>3. Check access</h2><p>Check that the connector can list a selected folder.</p>
 <label for="root">Selected folder</label><select id="root" disabled></select><button id="preview" disabled>Check folder</button>
 <ul id="entries"></ul></section><footer>Independent open-source project. Not affiliated with Synology or OpenAI. File contents and names are untrusted data.</footer></main></body></html>

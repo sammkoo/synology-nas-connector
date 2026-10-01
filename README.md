@@ -1,12 +1,12 @@
 # Synology NAS Connector for ChatGPT
 
-Independent, MIT-licensed **v0.1 developer preview**. A read-only MCP server for selected NAS folders, a portable Node.js core, a DSM dashboard, and a reproducible DSM `.spk` builder. No OpenAI API key, DSM password, file upload, outbound relay, telemetry or inference calls are required.
+Independent, MIT-licensed **v0.1 developer preview**. A read-only MCP server for selected NAS folders, a portable Node.js core, a DSM dashboard, and a reproducible DSM `.spk` builder. Local operation requires no OpenAI API key or DSM password. Optional gateway pairing enables outbound HTTPS/WSS for ChatGPT access; the gateway sees requested data in transit. No telemetry or inference calls are made.
 
-**Implemented:** folder listing, filename search, metadata, bounded UTF-8 document reads; MCP stdio and stateless Streamable HTTP; bearer-token development authentication; DSM package lifecycle. Build 0002 adds an authenticated management bridge, graphical share selection and live policy revocation, pending real DSM CGI validation.
+**Implemented:** folder listing, filename search, metadata, bounded UTF-8 document reads; MCP stdio and stateless Streamable HTTP; bearer-token development authentication; DSM package lifecycle. Build 0005 includes an authenticated management bridge, graphical share selection, live policy revocation, administrator-confirmed gateway pairing, connection status and signed disconnection, pending real DSM CGI validation.
 
-**Remaining product gates:** DSM pairing controls, gateway deployment, real ChatGPT linking, Sign in with ChatGPT and public distribution. These features are disabled in the NAS UI. A `.spk` build is not proof of installation compatibility; real DSM testing remains a release gate.
+**Remaining product gates:** Real DSM installation/authentication, approved public gateway hosting, real ChatGPT linking, Sign in with ChatGPT and public distribution. The NAS UI provides gateway pairing controls; it does not claim an implemented OpenAI identity flow. A `.spk` build is not proof of installation compatibility; real DSM testing remains a release gate.
 
-Development now includes [durable gateway OAuth, NAS ownership pairing and browser consent](docs/gateway-auth.md), plus an [outbound WSS relay and protected MCP resource](docs/relay.md). These components are tested through real local TLS, separately from the shipped NAS service. The gateway browser has first-party sessions, a folder consent screen and disconnection controls. A [native/Docker gateway service](docs/gateway-deployment.md) now supplies private initialization, listener limits and restart-safe state. DSM pairing integration, public HTTPS hosting and real ChatGPT linking remain required.
+Development now includes [durable gateway OAuth, NAS ownership pairing and browser consent](docs/gateway-auth.md), plus an [outbound WSS relay and protected MCP resource](docs/relay.md). These components and the NAS connection controller are tested together through real local TLS. The gateway browser has first-party sessions, a folder consent screen and disconnection controls. A [native/Docker gateway service](docs/gateway-deployment.md) now supplies private initialization, listener limits and restart-safe state. Public HTTPS hosting, device validation and real ChatGPT linking remain required.
 
 ## Quick start
 
@@ -74,7 +74,7 @@ The selected UID/GID must own `.local/token` and be able to traverse the mounted
 
 ## Gateway service
 
-The separate gateway has its own private state/key and supports direct HTTPS or a loopback TLS proxy. Its CLI and Docker target are tested independently of DSM. Follow [gateway deployment](docs/gateway-deployment.md) to initialize with a real issuer/callback allowlist, install TLS files and start `dist/gateway.cjs`. The NAS package still requires agent/pairing controls before ordinary users can connect through it.
+The separate gateway has its own private state/key and supports direct HTTPS or a loopback TLS proxy. Its CLI and Docker target are tested independently of DSM. Follow [gateway deployment](docs/gateway-deployment.md) to initialize with a real issuer/callback allowlist, install TLS files and start `dist/gateway.cjs`. The DSM UI can now pair with that gateway and show the protected MCP URL after its connection is online. Validate on a test NAS before connecting real documents.
 
 ## DSM package
 
@@ -84,14 +84,14 @@ npm run spk
 npm run test:spk
 ```
 
-Output: `artifacts/SynologyNASConnector-0.1.0-0004-noarch.spk` and its SHA-256 checksum. See [DSM management preview](docs/dsm-management.md) for the setup flow and device-validation limits. Build 0004 shares the read-only operation definitions with the relay and preserves the OAuth tool catalog on the wire. Gateway and relay modules remain separate from the NAS bundle; installing this package does not start an outbound connection. The [original installation guide](docs/installation.md) also documents manual/local diagnostics.
+Output: `artifacts/SynologyNASConnector-0.1.0-0005-noarch.spk` and its SHA-256 checksum. See [DSM management preview](docs/dsm-management.md) for the setup flow and device-validation limits. Build 0005 bundles the outbound relay and DSM pairing controls, with no gateway SQLite in the NAS bundle. A fresh installation has no outbound connection; only explicit administrator pairing enables it. A previously paired installation resumes its saved connection after restart or upgrade. Upgrade preserves the private identity and connection record. The [original installation guide](docs/installation.md) also documents manual/local diagnostics.
 
 ## Project layout
 
 ```text
 packages/core/      filesystem policy, limits, config; no DSM or MCP dependency
 packages/auth/      local-token authentication and future OAuth adapter contract
-packages/management/ signed bridge, share catalog and private configuration service
+packages/management/ signed bridge, share catalog, private config and connection controller
 packages/gateway/   OAuth, signed pairing, browser consent and deployment runtime
 packages/relay/     persistent NAS identity, outbound WSS agent and bounded protocol
 apps/server/        MCP tool definitions, HTTP transport, stdio CLI

@@ -1,6 +1,6 @@
 # Outbound NAS relay implementation
 
-`packages/relay` and `packages/gateway` implement an outbound WSS connection and the gateway `/mcp` resource. They are development libraries, exercised through real loopback TLS and the official MCP SDK client. The DSM package does not yet start an agent or provide pairing controls. The [gateway service](gateway-deployment.md) supplies a native CLI and Docker target. No public deployment, release or real ChatGPT connection is implied.
+`packages/relay` and `packages/gateway` implement an outbound WSS connection and the gateway `/mcp` resource. They are exercised through real loopback TLS and the official MCP SDK client. Build 0005 connects the DSM administrator bridge to a persistent NAS connection controller; explicit pairing enables the agent. The [gateway service](gateway-deployment.md) supplies a native CLI and Docker target. No public deployment, release or real ChatGPT connection is implied.
 
 ## Ownership and data path
 
@@ -46,7 +46,7 @@ agent.start();
 
 These examples show library composition; use the [gateway CLI and Docker instructions](gateway-deployment.md) for the complete server command. The agent's `connect()` performs one connection attempt; `start()` manages reconnection. State observers expose only `stopped`, `connecting`, `online` and `offline`. The private directory must be process-owned and mode `0700`, and `identity.key` mode `0600`; symlink/unsafe ownership/permission replacements fail closed. Never rotate the key silently after a read error or lose it during a package upgrade.
 
-The normal agent uses the OS trust store. The optional `trust.ca` and DNS lookup are for explicitly managed trust environments and isolated tests; there is no insecure certificate-validation switch. Pairing approval and the DSM administrator bridge still need to be connected to this agent before enabling it for ordinary users.
+The normal agent uses the OS trust store. The optional `trust.ca` and DNS lookup are for explicitly managed trust environments and isolated tests; there is no insecure certificate-validation switch. The NAS connection controller wires those components together and supplies a public-only DNS lookup for all HTTP and WSS connections. Ordinary users still need an approved gateway and device validation.
 
 ## Bounds and failure behavior
 
@@ -70,7 +70,7 @@ HTTP and WS share one exact-IP proxy policy. A trusted proxy must overwrite forw
 
 TLS terminates at the gateway. It can see filenames, metadata and returned document text in memory; this is **not end-to-end encryption**. It stores owner/device keys, aliases/labels and grants, but the implementation does not persist, cache or log file contents. A real operator must configure body-free logs, crash reporting, retention, backups and monitoring accordingly. The NAS pairing private credential and identity key are never sent as MCP bearer credentials.
 
-The operational gateway CLI/container now provides private initialization, state/key binding, exclusive storage, listener/socket limits and graceful shutdown. Remaining gates include DSM agent configuration and pairing controls, production HTTPS hosting and resource validation, reconnect/upgrade tests on real NAS hardware, and current ChatGPT client linking/revocation. Single-process SQLite and in-memory channels are supported; horizontal replication is not implemented.
+The operational gateway CLI/container now provides private initialization, state/key binding, exclusive storage, listener/socket limits and graceful shutdown. Remaining gates include real DSM session/package validation, production HTTPS hosting and resource validation, reconnect/upgrade tests on real NAS hardware, and current ChatGPT client linking/revocation. Single-process SQLite and in-memory channels are supported; horizontal replication is not implemented.
 
 ## Evidence
 
