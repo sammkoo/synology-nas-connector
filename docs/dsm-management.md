@@ -2,7 +2,7 @@
 
 This developer build provides folder selection, access checks, gateway pairing, connection status and disconnection. The backend is covered by actual HTTPS/WSS tests. Real DSM CGI executor/session permissions, installation, upgrade and reboot still require hardware validation; do not describe this as a finished consumer release.
 
-Open the app in Package Center while signed in as a DSM administrator. The launcher uses `/webman/3rdparty/SynologyNASConnector/index.html`. Build 0001 omitted `/webman`, producing a 404 even though its service was running; this was reproduced on DS224+ / DSM 7.4.1-90080 and the correct URL was verified on that device. This observation does not prove the new CGI bridge works there.
+Open the app in Package Center while signed in as a DSM administrator. The launcher uses `/webman/3rdparty/SynologyNASConnector/index.html`. Build 0001 omitted `/webman`, producing a 404 even though its service was running; this was reproduced on a DSM 7 device and the correct URL was verified on that device. This observation does not prove the new CGI bridge works there.
 
 ## Setup
 

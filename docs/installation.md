@@ -8,7 +8,7 @@ For local development or a local MCP client, use the [README quick start](../REA
 
 ## Synology DSM preview
 
-Target: DSM 7.2 or newer with the official **Node.js v22** package available for that model. The payload is architecture-independent JavaScript, which does not certify every NAS model. Check [Synology's Node.js v22 page](https://www.synology.com/en-us/dsm/packages/Node.js_v22) and Package Center on the actual NAS. The inspected DS224+ had that package installed; ARM installation/upgrade is still unverified.
+Target: DSM 7.2 or newer with the official **Node.js v22** package available for that model. The payload is architecture-independent JavaScript, which does not certify every NAS model. Check [Synology's Node.js v22 page](https://www.synology.com/en-us/dsm/packages/Node.js_v22) and Package Center on the actual NAS. The inspected a DSM 7 device had that package installed; ARM installation/upgrade is still unverified.
 
 This is an unsigned community **developer preview**, not a Package Center listing or a finished consumer release. Real DSM authentication, package-user permissions, upgrades/reboots and a real ChatGPT connection remain release gates. See the [verification record](verification.md).
 

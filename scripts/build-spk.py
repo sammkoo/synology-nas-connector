@@ -60,7 +60,7 @@ def main():
         gz.write(payload.getvalue())
     out = ROOT/'artifacts'
     out.mkdir(exist_ok=True)
-    package = out/'SynologyNASConnector-0.1.0-0005-noarch.spk'
+    package = out/'SynologyNASConnector-0.1.0-0006-noarch.spk'
     with tarfile.open(package, 'w', format=tarfile.USTAR_FORMAT) as tar:
         info = (META/'INFO').read_text()
         info += f'checksum="{hashlib.md5(compressed.getvalue()).hexdigest()}"\n'

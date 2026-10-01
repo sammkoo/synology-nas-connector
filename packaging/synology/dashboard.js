@@ -39,7 +39,7 @@ async function api(action,body) {
   const response = await fetch(`api.cgi?action=${action}`,{credentials:'same-origin',cache:'no-store',
     ...(body ? {method:'POST',headers:{'Content-Type':'application/json','X-NAS-CSRF':csrf},body:JSON.stringify(body)} : {})});
   let data;
-  try {data=await response.json();} catch {throw new Error('The DSM management service did not return a valid response.');}
+  try {data=await response.json();} catch {throw new Error(`DSM returned HTTP ${response.status} instead of a JSON management response. Ask the package maintainer to check the CGI service.`);}
   if (!response.ok) {
     if(data.error==='SESSION_EXPIRED'){sessionReady=false;save.disabled=true;preview.disabled=true;renderConnection();}
     throw new Error(errors[data.error] || 'Unable to complete this action. No extra folders were enabled.');
