@@ -12,7 +12,7 @@ Target: DSM 7.2 or newer with the official **Node.js v22** package available for
 
 This is an unsigned community **developer preview**, not a Package Center listing or a finished consumer release. Real DSM authentication, package-user permissions, upgrades/reboots and a real ChatGPT connection remain release gates. See the [verification record](verification.md).
 
-**Known device failure:** build 0005 installed and ran, but its DSM management bootstrap returned HTTP 503 with DSM HTML. Build 0006 corrects CGI status formatting; real-device verification of that correction is pending. The steps below describe the intended setup after successful administrator verification. Stop if the management interface cannot initialize.
+**Known device failure:** builds 0005 and 0006 installed and ran, but DSM management bootstrap returned HTTP 503 with DSM HTML. The build 0006 header correction did not resolve this failure. Source build 0007 adds bounded failure-stage reporting and a JSON error envelope; it has not yet been validated on DSM. The steps below describe the intended setup after successful administrator verification. Stop if the management interface cannot initialize.
 
 1. Download `SynologyNASConnector-0.1.0-0006-noarch.spk` and its `.sha256` sidecar from the [preview release](https://github.com/sammkoo/synology-nas-connector/releases/tag/v0.1.0-preview.6). Check the downloaded filename and SHA-256 against that release before installing. Building source is optional; the release includes source and checksums.
 2. Install official **Node.js v22** in Package Center. Sign in to DSM as an administrator over HTTPS. In Package Center, choose **Manual Install** and select the connector `.spk`. Review any community-package consent shown by DSM yourself.
@@ -35,7 +35,8 @@ Remove a folder selection and save to revoke it. Live reads enforce the new poli
 | DSM login or setup session expired | Sign back in to DSM over HTTPS and refresh the connector. |
 | Administrator required | Open the app with a DSM account in the `administrators` group. |
 | Management bridge unavailable | Stop setup. Check the package/runtime and verified CGI identity; report the fixed error code. Never broaden private key permissions. |
-| DSM returns HTTP 503 or non-JSON HTML | Stop setup and report the HTTP status plus package version. Build 0006 corrects CGI header syntax but is not yet a verified resolution of this device failure. |
+| DSM returns HTTP 503 or non-JSON HTML | Stop setup and report the HTTP status plus package version. Build 0006 did not resolve the observed device failure. Build 0007 requires real-device verification. |
+| A fixed `DSM_AUTH_EXECUTION_FAILED`, `DSM_GROUP_LOOKUP_FAILED`, `DSM_CONFIG_READ_FAILED` or signing-key code appears | Stop setup and report only the code and package version. Do not post cookies, keys or raw logs, grant extra permissions, or bypass certificate checks. These codes identify a failed bridge stage; they do not prove its underlying cause. |
 | Folder permission needed | Grant the package system user read-only access to that specific share and refresh. |
 | Gateway address rejected | Use its public HTTPS origin, without credentials, query or `/mcp` path. Private/loopback/reserved destinations are denied. |
 | Gateway unavailable or certificate error | Check NAS internet access, the gateway address and its operator's certificate/status. There is no certificate bypass. |

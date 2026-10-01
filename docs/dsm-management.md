@@ -1,8 +1,12 @@
-# DSM setup and gateway pairing (package build 0006)
+# DSM setup and gateway pairing (package build 0007)
 
 This developer build provides folder selection, access checks, gateway pairing, connection status and disconnection. The backend is covered by actual HTTPS/WSS tests. Real DSM CGI executor/session permissions, installation, upgrade and reboot still require hardware validation; do not describe this as a finished consumer release.
 
 The approved upgrade to `0006` was installed and showed Running on a DSM 7 device, but the cache-refreshed UI still received HTTP 503 instead of JSON. Folder selection and pairing therefore remain disabled on that device. The CGI header correction is validated by process tests; it did not resolve the observed DSM HTTP failure.
+
+Build `0007` is a diagnostic compatibility candidate. It reports a fixed code for authentication-helper execution, group lookup, configuration access, signing-key access or local-service connection failure. Raw child errors, command output, cookies and private paths are not returned or logged. A failed stage remains a rejection; these codes do not establish the underlying cause or a working DSM session.
+
+Only the DSM CGI transport maps HTTP server errors to a `200` JSON error envelope with `error` and the original `httpStatus`, to allow error reporting when DSM replaces a 5xx body with HTML. The dashboard rejects any top-level `error` regardless of HTTP status. Login/admin rejections retain HTTP 401/403; MCP and OAuth HTTP behavior is unchanged. Process and dashboard tests validate the envelope and prevent setup from becoming ready on an error. Whether the device preserves this response must still be verified.
 
 Open the app in Package Center while signed in as a DSM administrator. The launcher uses `/webman/3rdparty/SynologyNASConnector/index.html`. Build 0001 omitted `/webman`, producing a 404 even though its service was running; this was reproduced on a DSM 7 device and the correct URL was verified on that device. This observation does not prove the new CGI bridge works there.
 

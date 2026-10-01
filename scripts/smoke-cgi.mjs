@@ -7,13 +7,17 @@ import path from 'node:path';
 const cases = [
   { length: '0', input: '', status: '401 Unauthorized', error: 'DSM_LOGIN_REQUIRED' },
   { length: '16385', input: '', status: '413 Payload Too Large', error: 'REQUEST_TOO_LARGE' },
-  { length: '1', input: '', status: '400 Bad Request', error: 'INVALID_BODY' }
+  { length: '1', input: '', status: '400 Bad Request', error: 'INVALID_BODY' },
+  // An invented fixture value, never an actual DSM session. The helper is
+  // absent on CI/macOS, so this exercises a real failed child-process launch.
+  { length: '0', input: '', status: '200 OK', error: 'DSM_AUTH_EXECUTION_FAILED',
+    env: {HTTP_COOKIE:'fixture-only-invalid-cookie'},httpStatus:503 }
 ];
 for (const scenario of cases) {
   const processResult = spawnSync(process.execPath,
     [path.resolve('dist/dsm-bridge.cjs'), path.resolve('dist/absent-smoke-config.json')], {
       env: { PATH: '/usr/bin:/bin', REQUEST_METHOD: 'GET', QUERY_STRING: 'action=bootstrap',
-        REMOTE_ADDR: '127.0.0.1', CONTENT_LENGTH: scenario.length },
+        REMOTE_ADDR: '127.0.0.1', CONTENT_LENGTH: scenario.length,...scenario.env },
       input: scenario.input, encoding: 'utf8', timeout: 10000, maxBuffer: 65536
     });
   assert.ifError(processResult.error);
@@ -26,6 +30,7 @@ for (const scenario of cases) {
   assert.ok(headers.includes('Content-Type: application/json; charset=utf-8'));
   assert.ok(headers.includes('Cache-Control: no-store'));
   assert.ok(headers.includes('X-Content-Type-Options: nosniff'));
-  assert.deepEqual(JSON.parse(processResult.stdout.slice(separator + 4)), { error: scenario.error });
+  assert.deepEqual(JSON.parse(processResult.stdout.slice(separator + 4)),
+    { error: scenario.error,...(scenario.httpStatus ? {httpStatus:scenario.httpStatus} : {}) });
 }
-console.log('Bundled CGI emitted valid status/JSON headers for unauthenticated, oversized and truncated requests');
+console.log('Bundled CGI emitted valid status/JSON headers for unauthenticated, oversized, truncated and failed authentication-helper requests');

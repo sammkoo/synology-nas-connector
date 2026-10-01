@@ -11,6 +11,14 @@ const errors = {
   DSM_ADMIN_REQUIRED:'Open this app while signed in to DSM as an administrator.',
   DSM_LOGIN_REQUIRED:'Your DSM session has ended. Sign in to DSM and open this app again.',
   DSM_BRIDGE_UNAVAILABLE:'The DSM management bridge is unavailable. This preview needs verification on your NAS; no folder permissions were changed.',
+  DSM_AUTH_EXECUTION_FAILED:'DSM session verification could not run. Ask the package maintainer to check the authentication helper (DSM_AUTH_EXECUTION_FAILED).',
+  DSM_GROUP_LOOKUP_FAILED:'DSM administrator membership could not be checked. Ask the package maintainer to check the account lookup (DSM_GROUP_LOOKUP_FAILED).',
+  DSM_CONFIG_READ_FAILED:'The management bridge could not read the package configuration (DSM_CONFIG_READ_FAILED). Ask the package maintainer to check the CGI account; do not broaden private file permissions.',
+  DSM_SIGNING_KEY_READ_FAILED:'The management bridge could not read its private signing key (DSM_SIGNING_KEY_READ_FAILED). Ask the package maintainer to check the CGI account; do not broaden private file permissions.',
+  DSM_LOCAL_SERVICE_UNAVAILABLE:'The management bridge could not reach the local package service (DSM_LOCAL_SERVICE_UNAVAILABLE). Check that the package is running.',
+  PRIVATE_SECRET_REQUIRED:'The management key is not safely accessible to the CGI account (PRIVATE_SECRET_REQUIRED). Ask the package maintainer to check package ownership; do not broaden private file permissions.',
+  INVALID_MANAGEMENT_SECRET:'The private management key is invalid (INVALID_MANAGEMENT_SECRET). Ask the package maintainer to check preserved package state.',
+  MANAGEMENT_UNAVAILABLE:'The local package service is not configured for DSM management (MANAGEMENT_UNAVAILABLE).',
   SESSION_EXPIRED:'Your setup session expired. Refresh this page before saving.',
   CONFIGURATION_CHANGED:'Folder settings changed in another session. Refresh this page to see the latest selection.',
   FOLDER_PERMISSION_REQUIRED:'Give the package read-only permission to that folder in DSM, then refresh.',
@@ -40,7 +48,9 @@ async function api(action,body) {
     ...(body ? {method:'POST',headers:{'Content-Type':'application/json','X-NAS-CSRF':csrf},body:JSON.stringify(body)} : {})});
   let data;
   try {data=await response.json();} catch {throw new Error(`DSM returned HTTP ${response.status} instead of a JSON management response. Ask the package maintainer to check the CGI service.`);}
-  if (!response.ok) {
+  // DSM may replace HTTP 5xx bodies with HTML. The CGI preserves those errors
+  // in a 200 JSON envelope; an error never establishes a management session.
+  if (!response.ok || data.error) {
     if(data.error==='SESSION_EXPIRED'){sessionReady=false;save.disabled=true;preview.disabled=true;renderConnection();}
     throw new Error(errors[data.error] || 'Unable to complete this action. No extra folders were enabled.');
   }

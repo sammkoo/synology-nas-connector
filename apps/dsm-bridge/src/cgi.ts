@@ -1,6 +1,7 @@
 import { ManagementError } from '../../../packages/management/src/index.js';
 import { STATUS_CODES } from 'node:http';
 import { forwardManagement } from './bridge.js';
+import { cgiResponse } from './response.js';
 
 async function main() {
   let result: {status:number;body:unknown};
@@ -22,6 +23,7 @@ async function main() {
     result = {status:e instanceof ManagementError ? e.status : 503,
       body:{error:e instanceof ManagementError ? e.code : 'DSM_BRIDGE_UNAVAILABLE'}};
   }
-  process.stdout.write(`Status: ${result.status} ${STATUS_CODES[result.status] ?? 'Unknown Status'}\r\nContent-Type: application/json; charset=utf-8\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n\r\n${JSON.stringify(result.body)}`);
+  const output = cgiResponse(result);
+  process.stdout.write(`Status: ${output.status} ${STATUS_CODES[output.status] ?? 'Unknown Status'}\r\nContent-Type: application/json; charset=utf-8\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n\r\n${JSON.stringify(output.body)}`);
 }
 void main();

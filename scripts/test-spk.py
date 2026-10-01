@@ -9,7 +9,7 @@ import tarfile
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-spk = ROOT/'artifacts/SynologyNASConnector-0.1.0-0006-noarch.spk'
+spk = ROOT/'artifacts/SynologyNASConnector-0.1.0-0007-noarch.spk'
 original = spk.read_bytes()
 with tarfile.open(spk) as tar:
     names = set(tar.getnames())
