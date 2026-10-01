@@ -10,7 +10,7 @@ Development now includes [durable gateway OAuth, NAS ownership pairing and brows
 
 ## DSM setup and downloads
 
-Download the `.spk` and matching checksum from the [build 0005 preview](https://github.com/sammkoo/synology-nas-connector/releases/tag/v0.1.0-preview.5), then follow the [graphical installation guide](docs/installation.md). DSM setup uses your existing administrator session, folder selection and comparison-code pairing; no raw JSON or copied bearer token is needed. You need a separately deployed trusted HTTPS gateway for remote ChatGPT access. This preview still requires real-device and real-account validation.
+Download the `.spk` and matching checksum from the [build 0006 preview](https://github.com/sammkoo/synology-nas-connector/releases/tag/v0.1.0-preview.6), then follow the [graphical installation guide](docs/installation.md). Build 0005 returned DSM HTTP 503 during real-device bootstrap; 0006 corrects CGI status formatting but is not yet a confirmed fix for that failure. DSM setup uses your existing administrator session, folder selection and comparison-code pairing; no raw JSON or copied bearer token is needed. You need a separately deployed trusted HTTPS gateway for remote ChatGPT access. This preview still requires real-device and real-account validation.
 
 ## Quick start
 

@@ -8,11 +8,13 @@ For local development or a local MCP client, use the [README quick start](../REA
 
 ## Synology DSM preview
 
-Target: DSM 7.2 or newer with the official **Node.js v22** package available for that model. The payload is architecture-independent JavaScript, which does not certify every NAS model. Check [Synology's Node.js v22 page](https://www.synology.com/en-us/dsm/packages/Node.js_v22) and Package Center on the actual NAS. The inspected a DSM 7 device had that package installed; ARM installation/upgrade is still unverified.
+Target: DSM 7.2 or newer with the official **Node.js v22** package available for that model. The payload is architecture-independent JavaScript, which does not certify every NAS model. Check [Synology's Node.js v22 page](https://www.synology.com/en-us/dsm/packages/Node.js_v22) and Package Center on the actual NAS. The inspected DSM 7 device had that package installed; ARM installation/upgrade is still unverified.
 
 This is an unsigned community **developer preview**, not a Package Center listing or a finished consumer release. Real DSM authentication, package-user permissions, upgrades/reboots and a real ChatGPT connection remain release gates. See the [verification record](verification.md).
 
-1. Download `SynologyNASConnector-0.1.0-0005-noarch.spk` and its `.sha256` sidecar from the [preview release](https://github.com/sammkoo/synology-nas-connector/releases/tag/v0.1.0-preview.5). Check the downloaded filename and SHA-256 against that release before installing. Building source is optional; the release includes source and checksums.
+**Known device failure:** build 0005 installed and ran, but its DSM management bootstrap returned HTTP 503 with DSM HTML. Build 0006 corrects CGI status formatting; real-device verification of that correction is pending. The steps below describe the intended setup after successful administrator verification. Stop if the management interface cannot initialize.
+
+1. Download `SynologyNASConnector-0.1.0-0006-noarch.spk` and its `.sha256` sidecar from the [preview release](https://github.com/sammkoo/synology-nas-connector/releases/tag/v0.1.0-preview.6). Check the downloaded filename and SHA-256 against that release before installing. Building source is optional; the release includes source and checksums.
 2. Install official **Node.js v22** in Package Center. Sign in to DSM as an administrator over HTTPS. In Package Center, choose **Manual Install** and select the connector `.spk`. Review any community-package consent shown by DSM yourself.
 3. Start the package and open **Synology NAS Connector** from Package Center/DSM. The app verifies your existing DSM administrator session. It never asks for your DSM password, OpenAI API key or private token. A fresh installation starts with no folders enabled and no outbound connection.
 4. In **Choose folders**, select only the desired shares and save. For a folder marked **permission needed**, use Control Panel → Shared Folder → Edit → Permissions → System internal user and grant `SynologyNASConnector` **read-only** permission to that share, then refresh the app. Keep broad group/write permissions disabled. DSM wording can vary by version; the package does not edit ACLs.
@@ -33,6 +35,7 @@ Remove a folder selection and save to revoke it. Live reads enforce the new poli
 | DSM login or setup session expired | Sign back in to DSM over HTTPS and refresh the connector. |
 | Administrator required | Open the app with a DSM account in the `administrators` group. |
 | Management bridge unavailable | Stop setup. Check the package/runtime and verified CGI identity; report the fixed error code. Never broaden private key permissions. |
+| DSM returns HTTP 503 or non-JSON HTML | Stop setup and report the HTTP status plus package version. Build 0006 corrects CGI header syntax but is not yet a verified resolution of this device failure. |
 | Folder permission needed | Grant the package system user read-only access to that specific share and refresh. |
 | Gateway address rejected | Use its public HTTPS origin, without credentials, query or `/mcp` path. Private/loopback/reserved destinations are denied. |
 | Gateway unavailable or certificate error | Check NAS internet access, the gateway address and its operator's certificate/status. There is no certificate bypass. |
