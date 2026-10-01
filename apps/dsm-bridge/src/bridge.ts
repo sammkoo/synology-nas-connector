@@ -15,6 +15,26 @@ async function stage<T>(code:string,operation:()=>Promise<T>):Promise<T> {
     throw new ManagementError(code,503);
   }
 }
+async function authenticate(env:NodeJS.ProcessEnv,run:DsmExecutor) {
+  try {
+    return await run('/usr/syno/synoman/webman/modules/authenticate.cgi',[],{env,timeout:3000,maxBuffer:2048});
+  } catch (error) {
+    // Only classify bounded process metadata. Never accept stdout from a failed
+    // helper, or return/log a raw child error containing the inherited session.
+    const failure=error as {code?:unknown;killed?:unknown;signal?:unknown} | null;
+    let code='DSM_AUTH_EXECUTION_FAILED',status=503;
+    if (failure?.code==='ENOENT') code='DSM_AUTH_HELPER_MISSING';
+    else if (failure?.code==='EACCES'||failure?.code==='EPERM') code='DSM_AUTH_HELPER_DENIED';
+    else if (failure?.code==='ERR_CHILD_PROCESS_STDIO_MAXBUFFER') code='DSM_AUTH_HELPER_OUTPUT_LIMIT';
+    else if (failure?.killed===true) code='DSM_AUTH_HELPER_INTERRUPTED';
+    else if (typeof failure?.code==='number'&&Number.isInteger(failure.code)&&failure.code>=1&&failure.code<=255&&!failure.signal) {
+      // A nonzero exit means authentication was not established. Its precise
+      // DSM-specific meaning is undocumented; do not claim the session expired.
+      code='DSM_AUTH_SESSION_REJECTED';status=401;
+    }
+    throw new ManagementError(code,status);
+  }
+}
 export function requireAdministrator(username: string, groups: string) {
   if (!/^[A-Za-z0-9_.@\\-]{1,128}$/.test(username) || username.startsWith('-') ||
       !groups.trim().split(/\s+/).includes('administrators')) throw new ManagementError('DSM_ADMIN_REQUIRED',403);
@@ -42,7 +62,7 @@ export async function forwardManagement(env: NodeJS.ProcessEnv, body: Buffer, co
   if (!env.HTTP_COOKIE || !env.REMOTE_ADDR) throw new ManagementError('DSM_LOGIN_REQUIRED',401);
   // Official DSM authentication executable reads the existing CGI session cookie.
   // No passwords, cookies or DSM tokens are sent to the Node management service.
-  const auth = await stage('DSM_AUTH_EXECUTION_FAILED',()=>run('/usr/syno/synoman/webman/modules/authenticate.cgi',[],{env,timeout:3000,maxBuffer:2048}));
+  const auth = await authenticate(env,run);
   const user = auth.stdout.trim();
   if (!/^[A-Za-z0-9_.@\\-]{1,128}$/.test(user) || user.startsWith('-')) throw new ManagementError('DSM_LOGIN_REQUIRED',401);
   const groups = await stage('DSM_GROUP_LOOKUP_FAILED',()=>run('/usr/bin/id',['-Gn',user],{timeout:3000,maxBuffer:4096}));

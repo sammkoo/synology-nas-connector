@@ -1,10 +1,10 @@
-# DSM setup and gateway pairing (package build 0007)
+# DSM setup and gateway pairing (package build 0008)
 
 This developer build provides folder selection, access checks, gateway pairing, connection status and disconnection. The backend is covered by actual HTTPS/WSS tests. Real DSM CGI executor/session permissions, installation, upgrade and reboot still require hardware validation; do not describe this as a finished consumer release.
 
 The approved upgrade to `0006` was installed and showed Running on a DSM 7 device, but the cache-refreshed UI still received HTTP 503 instead of JSON. Folder selection and pairing therefore remain disabled on that device. The CGI header correction is validated by process tests; it did not resolve the observed DSM HTTP failure.
 
-Build `0007` is a diagnostic compatibility candidate. It reports a fixed code for authentication-helper execution, group lookup, configuration access, signing-key access or local-service connection failure. Raw child errors, command output, cookies and private paths are not returned or logged. A failed stage remains a rejection; these codes do not establish the underlying cause or a working DSM session.
+Build `0008` is a DSM session compatibility candidate. It reports a fixed code for authentication-helper execution, group lookup, configuration access, signing-key access or local-service connection failure. Raw child errors, command output, cookies and private paths are not returned or logged. A failed stage remains a rejection; these codes do not establish the underlying cause or a working DSM session.
 
 Only the DSM CGI transport maps HTTP server errors to a `200` JSON error envelope with `error` and the original `httpStatus`, to allow error reporting when DSM replaces a 5xx body with HTML. The dashboard rejects any top-level `error` regardless of HTTP status. Login/admin rejections retain HTTP 401/403; MCP and OAuth HTTP behavior is unchanged. Process and dashboard tests validate the envelope and prevent setup from becoming ready on an error. Whether the device preserves this response must still be verified.
 
@@ -48,3 +48,11 @@ Package upgrades preserve roots, local token, management key, NAS identity and c
 Validate administrator/non-administrator sessions, cross-origin POST rejection, package-user ACLs, folder selection/revocation, pairing and comparison, actual gateway reads, offline disconnection, restart/reboot and upgrade. Confirm runtime paths and CGI executor identity through authorized diagnostics before changing package privileges. Keep household addresses, cookies, keys and NAS documents out of the public repository.
 
 Reference: [Synology web authentication guide](https://help.synology.com/developer-guide/integrate_dsm/web_authentication.html).
+
+## DSM session protection compatibility
+
+The dashboard obtains an opaque session protection token with a same-origin GET to `/webman/login.cgi` and sends it only as `X-SYNO-TOKEN` to this package’s CGI. It does not put the token in URLs, DOM text, storage, logs, management signatures or gateway requests. The independent `X-NAS-CSRF` protection still applies to writes. Missing, malformed or unsuccessful token responses stop initialization. DSM login, administrator and session rejections clear both in-memory tokens and disable management controls.
+
+The token endpoint and header are described in the [official DSM 6 developer guide, pages 87–88](https://global.download.synology.com/download/Document/Software/DeveloperGuide/Firmware/DSM/6.0/enu/DSM_Developer_Guide_6_0.pdf). The current [DSM 7 application authentication guide](https://help.synology.com/developer-guide/integrate_dsm/web_authentication.html) still describes the inherited CGI environment and authentication helper but does not document this token endpoint. This is an explicitly unverified compatibility candidate for newer DSM, not a guarantee that the endpoint or session flow works there.
+
+A nonzero authentication-helper exit rejects access as `DSM_AUTH_SESSION_REJECTED` (401), even if partial stdout resembles an administrator name. The specific meanings of DSM exit codes are not assumed. Missing executables, denied execution, bounded-output overflow and interruption receive separate fixed codes. Raw process metadata and child output remain private. No alternate helper path, root execution, certificate bypass or broader permissions are introduced.

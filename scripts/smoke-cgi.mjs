@@ -10,7 +10,7 @@ const cases = [
   { length: '1', input: '', status: '400 Bad Request', error: 'INVALID_BODY' },
   // An invented fixture value, never an actual DSM session. The helper is
   // absent on CI/macOS, so this exercises a real failed child-process launch.
-  { length: '0', input: '', status: '200 OK', error: 'DSM_AUTH_EXECUTION_FAILED',
+  { length: '0', input: '', status: '200 OK', error: 'DSM_AUTH_HELPER_MISSING',
     env: {HTTP_COOKIE:'fixture-only-invalid-cookie'},httpStatus:503 }
 ];
 for (const scenario of cases) {

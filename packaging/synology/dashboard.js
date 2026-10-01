@@ -4,7 +4,7 @@ const form = document.getElementById('folders');
 const save = document.getElementById('save');
 const preview = document.getElementById('preview');
 const root = document.getElementById('root');
-let csrf = '', revision = '';
+let csrf = '', revision = '', dsmToken = '';
 let connectionState={state:'not-configured'},polling=false,acting=false,sessionReady=false,connectionVersion=0;
 const element=id=>document.getElementById(id);
 const errors = {
@@ -12,6 +12,12 @@ const errors = {
   DSM_LOGIN_REQUIRED:'Your DSM session has ended. Sign in to DSM and open this app again.',
   DSM_BRIDGE_UNAVAILABLE:'The DSM management bridge is unavailable. This preview needs verification on your NAS; no folder permissions were changed.',
   DSM_AUTH_EXECUTION_FAILED:'DSM session verification could not run. Ask the package maintainer to check the authentication helper (DSM_AUTH_EXECUTION_FAILED).',
+  DSM_SESSION_TOKEN_UNAVAILABLE:'DSM could not provide its session protection token. Sign in to DSM and reopen this app. If this continues, report DSM_SESSION_TOKEN_UNAVAILABLE to the package maintainer.',
+  DSM_AUTH_SESSION_REJECTED:'DSM did not confirm this session. Sign in to DSM and reopen this app. If this continues, report DSM_AUTH_SESSION_REJECTED to the package maintainer.',
+  DSM_AUTH_HELPER_MISSING:'The DSM authentication helper is unavailable (DSM_AUTH_HELPER_MISSING). Ask the package maintainer to check DSM compatibility.',
+  DSM_AUTH_HELPER_DENIED:'DSM blocked authentication helper execution (DSM_AUTH_HELPER_DENIED). Ask the package maintainer to check compatibility; do not broaden permissions.',
+  DSM_AUTH_HELPER_OUTPUT_LIMIT:'The authentication helper exceeded its output limit (DSM_AUTH_HELPER_OUTPUT_LIMIT). Ask the package maintainer to check compatibility.',
+  DSM_AUTH_HELPER_INTERRUPTED:'DSM session verification was interrupted (DSM_AUTH_HELPER_INTERRUPTED). Ask the package maintainer to check compatibility.',
   DSM_GROUP_LOOKUP_FAILED:'DSM administrator membership could not be checked. Ask the package maintainer to check the account lookup (DSM_GROUP_LOOKUP_FAILED).',
   DSM_CONFIG_READ_FAILED:'The management bridge could not read the package configuration (DSM_CONFIG_READ_FAILED). Ask the package maintainer to check the CGI account; do not broaden private file permissions.',
   DSM_SIGNING_KEY_READ_FAILED:'The management bridge could not read its private signing key (DSM_SIGNING_KEY_READ_FAILED). Ask the package maintainer to check the CGI account; do not broaden private file permissions.',
@@ -43,15 +49,35 @@ const errors = {
   CONNECTION_NOT_SAVED:'The connection could not be saved. Check package storage before continuing.',
   DISCONNECT_NOT_PERSISTED:'The NAS is stopped now, but the disconnection could not be saved. Resolve package storage permissions before restarting the service.'
 };
+async function loadDsmToken() {
+  try {
+    // This same-origin GET and header are documented in Synology's DSM 6 guide.
+    // Compatibility with newer DSM must be device-tested. Never put this token
+    // in a URL, DOM node, storage, log, gateway request or management signature.
+    const response=await fetch('/webman/login.cgi',{credentials:'same-origin',cache:'no-store',redirect:'error',signal:AbortSignal.timeout(3000)});
+    if(!response.ok)throw new Error();
+    const data=await response.json();
+    if(data?.success!==true||data.error||typeof data.SynoToken!=='string'||!/^[\x21-\x7e]{1,512}$/.test(data.SynoToken))throw new Error();
+    dsmToken=data.SynoToken;
+  } catch {
+    dsmToken='';throw new Error(errors.DSM_SESSION_TOKEN_UNAVAILABLE);
+  }
+}
+function endSession() {
+  sessionReady=false;csrf='';dsmToken='';save.disabled=true;preview.disabled=true;root.disabled=true;renderConnection();
+}
 async function api(action,body) {
-  const response = await fetch(`api.cgi?action=${action}`,{credentials:'same-origin',cache:'no-store',
-    ...(body ? {method:'POST',headers:{'Content-Type':'application/json','X-NAS-CSRF':csrf},body:JSON.stringify(body)} : {})});
+  if(!dsmToken)throw new Error(errors.DSM_SESSION_TOKEN_UNAVAILABLE);
+  const headers={'X-SYNO-TOKEN':dsmToken,...(body?{'Content-Type':'application/json','X-NAS-CSRF':csrf}:{})};
+  const response = await fetch(`api.cgi?action=${action}`,{credentials:'same-origin',cache:'no-store',redirect:'error',headers,
+    ...(body ? {method:'POST',body:JSON.stringify(body)} : {})});
+  if([401,403,419].includes(response.status))endSession();
   let data;
   try {data=await response.json();} catch {throw new Error(`DSM returned HTTP ${response.status} instead of a JSON management response. Ask the package maintainer to check the CGI service.`);}
   // DSM may replace HTTP 5xx bodies with HTML. The CGI preserves those errors
   // in a 200 JSON envelope; an error never establishes a management session.
   if (!response.ok || data.error) {
-    if(data.error==='SESSION_EXPIRED'){sessionReady=false;save.disabled=true;preview.disabled=true;renderConnection();}
+    if(['SESSION_EXPIRED','DSM_LOGIN_REQUIRED','DSM_ADMIN_REQUIRED','DSM_AUTH_SESSION_REJECTED'].includes(data.error))endSession();
     throw new Error(errors[data.error] || 'Unable to complete this action. No extra folders were enabled.');
   }
   return data;
@@ -92,7 +118,7 @@ function renderConnection(data) {
   element('pairing').hidden=!pending;element('connected').hidden=!linked||pending;
   if(pending){element('user-code').textContent=c.userCode;element('verification').href=c.verificationUri;
     element('comparison-panel').hidden=c.state!=='confirmation-required';element('comparison').textContent=c.comparison||'';}
-  element('pair-confirm').disabled=element('pair-cancel').disabled=element('pair-disconnect').disabled=acting;
+  element('pair-confirm').disabled=element('pair-cancel').disabled=element('pair-disconnect').disabled=!sessionReady||acting;
   if(linked){element('connected-label').textContent=`${c.label} · ${c.issuer}`;element('mcp-url').textContent=c.mcpUrl;
     element('chatgpt-instructions').hidden=c.state!=='online';element('remote-revocation').hidden=!c.revocationPending;
     element('pair-disconnect').textContent=c.revocationPending?'Retry gateway revocation':'Disconnect NAS and revoke access';
@@ -122,7 +148,7 @@ form.addEventListener('submit',async event=>{
     const ids=[...form.querySelectorAll('input:checked')].map(input=>input.value);
     render(await api('roots',{ids,revision}));
     notice.textContent=ids.length?'Folder selection saved. Only these folders are enabled.':'All folder access removed.';
-  } catch(e){notice.textContent=e.message; save.disabled=false;}
+  } catch(e){notice.textContent=e.message; save.disabled=!sessionReady;}
 });
 preview.addEventListener('click',async()=>{
   preview.disabled=true;
@@ -131,8 +157,8 @@ preview.addEventListener('click',async()=>{
     const entries=document.getElementById('entries'); entries.replaceChildren();
     for(const entry of data.entries) {const li=document.createElement('li'); li.textContent=entry.name; entries.append(li);}
     notice.textContent=data.entries.length?'Folder access works. Showing up to 10 entries.':'Folder access works. No visible entries.';
-  } catch(e){notice.textContent=e.message;} finally{preview.disabled=!root.options.length;}
+  } catch(e){notice.textContent=e.message;} finally{preview.disabled=!sessionReady||!root.options.length;}
 });
-void api('bootstrap').then(data=>{
+void loadDsmToken().then(()=>api('bootstrap')).then(data=>{
   csrf=data.csrf; sessionReady=true;render(data); notice.textContent='DSM administrator verified. Choose the folders you want to enable.';
 }).catch(e=>{notice.textContent=e.message;});

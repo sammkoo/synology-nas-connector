@@ -88,7 +88,7 @@ npm run spk
 npm run test:spk
 ```
 
-Output: `artifacts/SynologyNASConnector-0.1.0-0007-noarch.spk` and its SHA-256 checksum. See [DSM management preview](docs/dsm-management.md) for the setup flow and device-validation limits. Build 0007 preserves bounded management errors in JSON and reports failure stages without child-process output or credentials. It remains a diagnostic compatibility candidate. It bundles the outbound relay and DSM pairing controls, with no gateway SQLite in the NAS bundle. A fresh installation has no outbound connection; only explicit administrator pairing enables it. A previously paired installation resumes its saved connection after restart or upgrade. Upgrade preserves the private identity and connection record. The [installation guide](docs/installation.md) provides graphical DSM setup and separate local diagnostics.
+Output: `artifacts/SynologyNASConnector-0.1.0-0008-noarch.spk` and its SHA-256 checksum. See [DSM management preview](docs/dsm-management.md) for the setup flow and device-validation limits. Build 0008 adds same-origin DSM session protection headers and distinguishes helper rejection from execution failure. Its DSM 6-documented token endpoint requires verification on newer DSM; it remains a compatibility candidate. It bundles the outbound relay and DSM pairing controls, with no gateway SQLite in the NAS bundle. A fresh installation has no outbound connection; only explicit administrator pairing enables it. A previously paired installation resumes its saved connection after restart or upgrade. Upgrade preserves the private identity and connection record. The [installation guide](docs/installation.md) provides graphical DSM setup and separate local diagnostics.
 
 ## Project layout
 

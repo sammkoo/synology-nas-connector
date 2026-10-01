@@ -1,6 +1,6 @@
 package="SynologyNASConnector"
 displayname="Synology NAS Connector for ChatGPT"
-version="0.1.0-0007"
+version="0.1.0-0008"
 description="Read-only MCP access to explicitly selected NAS folders. Optional outbound HTTPS gateway pairing and scoped OAuth access. Independent community package."
 arch="noarch"
 os_min_ver="7.2-64570"
