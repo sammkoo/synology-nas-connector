@@ -8,6 +8,10 @@ Independent, MIT-licensed **v0.1 developer preview**. A read-only MCP server for
 
 Development now includes [durable gateway OAuth, NAS ownership pairing and browser consent](docs/gateway-auth.md), plus an [outbound WSS relay and protected MCP resource](docs/relay.md). These components and the NAS connection controller are tested together through real local TLS. The gateway browser has first-party sessions, a folder consent screen and disconnection controls. A [native/Docker gateway service](docs/gateway-deployment.md) now supplies private initialization, listener limits and restart-safe state. Public HTTPS hosting, device validation and real ChatGPT linking remain required.
 
+## DSM setup and downloads
+
+Download the `.spk` and matching checksum from the [build 0005 preview](https://github.com/sammkoo/synology-nas-connector/releases/tag/v0.1.0-preview.5), then follow the [graphical installation guide](docs/installation.md). DSM setup uses your existing administrator session, folder selection and comparison-code pairing; no raw JSON or copied bearer token is needed. You need a separately deployed trusted HTTPS gateway for remote ChatGPT access. This preview still requires real-device and real-account validation.
+
 ## Quick start
 
 Use Node.js 22 (Node.js 24 is also covered by CI), Python 3 for packaging and OpenSSL for disposable TLS test certificates. Docker installs OpenSSL only in its build/test stage.
@@ -84,7 +88,7 @@ npm run spk
 npm run test:spk
 ```
 
-Output: `artifacts/SynologyNASConnector-0.1.0-0005-noarch.spk` and its SHA-256 checksum. See [DSM management preview](docs/dsm-management.md) for the setup flow and device-validation limits. Build 0005 bundles the outbound relay and DSM pairing controls, with no gateway SQLite in the NAS bundle. A fresh installation has no outbound connection; only explicit administrator pairing enables it. A previously paired installation resumes its saved connection after restart or upgrade. Upgrade preserves the private identity and connection record. The [original installation guide](docs/installation.md) also documents manual/local diagnostics.
+Output: `artifacts/SynologyNASConnector-0.1.0-0005-noarch.spk` and its SHA-256 checksum. See [DSM management preview](docs/dsm-management.md) for the setup flow and device-validation limits. Build 0005 bundles the outbound relay and DSM pairing controls, with no gateway SQLite in the NAS bundle. A fresh installation has no outbound connection; only explicit administrator pairing enables it. A previously paired installation resumes its saved connection after restart or upgrade. Upgrade preserves the private identity and connection record. The [installation guide](docs/installation.md) provides graphical DSM setup and separate local diagnostics.
 
 ## Project layout
 
