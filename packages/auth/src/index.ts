@@ -3,6 +3,9 @@ import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 
 export const NAS_READ_SCOPE = 'nas:read';
+export const NAS_CREATE_SCOPE = 'nas:create';
+export const NAS_SHARE_SCOPE = 'nas:share';
+export const NAS_SCOPES = [NAS_READ_SCOPE,NAS_CREATE_SCOPE,NAS_SHARE_SCOPE];
 export type Principal = {subject: string; scopes: readonly string[]; rootIds?: readonly string[]; deviceId?: string};
 /** A future OAuth adapter must verify signature/introspection, issuer, audience, expiry, scopes and revocation. */
 export interface Authenticator {
@@ -11,7 +14,7 @@ export interface Authenticator {
   challenge: string;
   resourceMetadata?: Record<string, unknown>;
 }
-export async function localTokenAuthenticator(tokenFile: string): Promise<Authenticator> {
+export async function localTokenAuthenticator(tokenFile: string,allowCreate=false): Promise<Authenticator> {
   const handle = await open(tokenFile, constants.O_RDONLY | constants.O_NOFOLLOW);
   let token: string;
   try {
@@ -27,7 +30,7 @@ export async function localTokenAuthenticator(tokenFile: string): Promise<Authen
     async authenticate(candidate) {
       if (candidate.length > 256) return null;
       const supplied = createHash('sha256').update(candidate).digest();
-      return timingSafeEqual(expected, supplied) ? {subject: 'local-owner', scopes: [NAS_READ_SCOPE]} : null;
+      return timingSafeEqual(expected, supplied) ? {subject: 'local-owner', scopes: allowCreate?NAS_SCOPES:[NAS_READ_SCOPE]} : null;
     }
   };
 }

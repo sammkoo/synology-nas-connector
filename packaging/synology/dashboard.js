@@ -28,6 +28,14 @@ const errors = {
   SESSION_EXPIRED:'Your setup session expired. Refresh this page before saving.',
   CONFIGURATION_CHANGED:'Folder settings changed in another session. Refresh this page to see the latest selection.',
   FOLDER_PERMISSION_REQUIRED:'Give the package read-only permission to that folder in DSM, then refresh.',
+  FOLDER_WRITE_PERMISSION_REQUIRED:'Creation needs Read/Write permission for this dedicated folder in DSM. No permissions were changed automatically.',
+  DRIVE_LOGIN_FAILED:'Drive sign-in failed. Check the NAS HTTPS address, Drive version and dedicated account. MFA accounts may require a different supported sign-in method.',
+  DRIVE_SESSION_REQUIRED:'Connect the dedicated Drive account again; its session is missing or expired.',
+  DRIVE_CONFIGURATION_INVALID:'Use the canonical HTTPS origin of your own NAS, without a path, query or credentials.',
+  DRIVE_PATH_MISMATCH:'Drive could not verify this file belongs to the selected NAS folder. Enable the same team folder in Drive and check its permissions.',
+  DRIVE_RESPONSE_INVALID:'Drive returned a response this version could not verify.',
+  DRIVE_UNAVAILABLE:'The Drive API is unavailable. Check the NAS address and certificate.',
+  CREATE_REQUIRES_LINUX:'Safe creation is supported on Linux/DSM only.',
   FOLDER_UNAVAILABLE:'That folder is no longer available. Refresh and choose again.',
   GATEWAY_URL_INVALID:'Enter a public HTTPS gateway address without a path, credentials or query.',
   GATEWAY_ADDRESS_DENIED:'The gateway must resolve only to public internet addresses. Local DSM and private addresses are not allowed.',
@@ -64,7 +72,7 @@ async function loadDsmToken() {
   }
 }
 function endSession() {
-  sessionReady=false;csrf='';dsmToken='';save.disabled=true;preview.disabled=true;root.disabled=true;renderConnection();
+  sessionReady=false;csrf='';dsmToken='';element('drive-password').value='';element('drive-connect').disabled=true;save.disabled=true;preview.disabled=true;root.disabled=true;renderConnection();
 }
 async function api(action,body) {
   if(!dsmToken)throw new Error(errors.DSM_SESSION_TOKEN_UNAVAILABLE);
@@ -85,6 +93,18 @@ async function api(action,body) {
 function render(data) {
   connectionVersion++;
   revision=data.revision;
+  element('drive-status').textContent=data.driveConfigured?'Drive account configured. Enable links only for selected team folders.':'Drive is not configured.';
+  element('drive-connect').disabled=!sessionReady;
+  const sharing=element('sharing-settings');sharing.replaceChildren();
+  for(const folder of data.roots){
+    const row=document.createElement('p'),button=document.createElement('button');button.type='button';
+    button.textContent=`${folder.label}: ${folder.allowShare?'Disable Drive links':'Enable Drive links'}`;button.disabled=!sessionReady||!data.driveConfigured;
+    button.addEventListener('click',async()=>{
+      if(!sessionReady)return;button.disabled=true;
+      try{render(await api('sharing',{rootId:folder.id,allowShare:!folder.allowShare,revision}));notice.textContent='Drive-link permission saved. Review nas:share when reconnecting ChatGPT.';}
+      catch(e){notice.textContent=e.message;button.disabled=!sessionReady;}
+    });row.append(button);sharing.append(row);
+  }
   const shares=document.getElementById('shares'); shares.replaceChildren();
   for(const share of data.shares) {
     const label=document.createElement('label');
@@ -95,6 +115,18 @@ function render(data) {
   }
   if(!data.shares.length) shares.textContent='No shared folders are available.';
   document.getElementById('permissions').hidden=!data.shares.some(s=>!s.readable);
+  const creation=element('creation-settings'); creation.replaceChildren();
+  for(const folder of data.roots){
+    const share=data.shares.find(s=>s.id===folder.id),row=document.createElement('p'),button=document.createElement('button');
+    button.type='button';button.textContent=`${folder.label}: ${folder.allowCreate?'Turn creation off':'Enable creation'}`;
+    button.disabled=!sessionReady||(!folder.allowCreate&&(!data.createSupported||!share?.writable));
+    button.addEventListener('click',async()=>{
+      if(!sessionReady)return;button.disabled=true;
+      try{render(await api('creation',{rootId:folder.id,allowCreate:!folder.allowCreate,revision}));notice.textContent='Creation permission saved. Review the new permission when reconnecting ChatGPT.';}
+      catch(e){notice.textContent=e.message;button.disabled=!sessionReady;}
+    });
+    row.append(button);if(!folder.allowCreate&&!share?.writable)row.append(document.createTextNode(' Read/Write permission required in DSM.'));creation.append(row);
+  }
   root.replaceChildren();
   for(const folder of data.roots) {
     const option=document.createElement('option'); option.value=folder.id; option.textContent=folder.label; root.append(option);
@@ -131,6 +163,12 @@ async function connectionAction(action,body) {
     action==='pair-disconnect'?'NAS transmission stopped. See connection status for gateway revocation.':action==='pair-cancel'?'Pairing cancelled.':'Open the gateway and enter the pairing code.';}
   catch(e){notice.textContent=e.message;}finally{acting=false;renderConnection();}
 }
+element('drive-form').addEventListener('submit',async event=>{
+  event.preventDefault();if(!sessionReady)return;
+  const passwd=element('drive-password').value;element('drive-password').value='';element('drive-connect').disabled=true;
+  try{render(await api('drive-connect',{baseUrl:element('drive-url').value,account:element('drive-account').value,passwd,revision}));notice.textContent='Drive connected. Link permissions were reset; enable only the folders you choose.';}
+  catch(e){notice.textContent=e.message;}finally{element('drive-connect').disabled=!sessionReady;}
+});
 element('pairing-form').addEventListener('submit',event=>{event.preventDefault();if(!element('gateway-consent').checked)return;
   void connectionAction('pair-begin',{issuer:element('gateway').value,label:element('nas-label').value,consent:true,revision});});
 element('gateway').addEventListener('input',()=>{element('gateway-consent').checked=false;});

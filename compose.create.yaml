@@ -1,0 +1,6 @@
+# Explicit development opt-in. Configure only this root with allowCreate:true.
+# Existing document/config mounts and the container root filesystem stay read-only.
+services:
+  connector:
+    volumes:
+      - ./examples/write-test:/data/write-test:rw

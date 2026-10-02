@@ -13,3 +13,6 @@ coverage/
 *.sqlite-*
 *.key
 *.pem
+
+examples/write-test/*
+!examples/write-test/README.md

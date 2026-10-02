@@ -49,8 +49,8 @@ test('official SDK client initializes, lists read-only tools and reads via real 
   await client.connect(new StreamableHTTPClientTransport(new URL(base+'/mcp'),{requestInit:{headers:{Authorization:`Bearer ${token}`}}}));
   try {
     const tools = await client.listTools();
-    assert.equal(tools.tools.length,5);
-    assert.ok(tools.tools.every(t => t.annotations?.readOnlyHint));
+    assert.equal(tools.tools.length,7);
+    assert.ok(tools.tools.filter(t=>!t.name.startsWith('create_')).every(t => t.annotations?.readOnlyHint));
     const result = await client.callTool({name:'read_text',arguments:{rootId:'docs',path:'note.txt'}});
     assert.match(JSON.stringify(result),/hello MCP/);
     const denied = await client.callTool({name:'read_text',arguments:{rootId:'docs',path:'../outside.txt'}});
@@ -62,7 +62,7 @@ test('official SDK client initializes, lists read-only tools and reads via real 
 test('invalid JSON and oversized requests do not disclose parser errors', async () => {
   const headers = {Authorization:`Bearer ${token}`,'Content-Type':'application/json'};
   assert.equal((await fetch(base+'/mcp',{method:'POST',headers,body:'{bad'})).status,400);
-  assert.equal((await fetch(base+'/mcp',{method:'POST',headers,body:JSON.stringify({data:'x'.repeat(20000)})})).status,413);
+  assert.equal((await fetch(base+'/mcp',{method:'POST',headers,body:JSON.stringify({data:'x'.repeat(140000)})})).status,413);
 });
 test('principal root restrictions hold at MCP tool boundary', async () => {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();

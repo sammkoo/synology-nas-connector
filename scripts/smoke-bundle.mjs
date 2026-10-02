@@ -11,7 +11,7 @@ try {
   await writeFile(path.join(dir, 'config.json'), JSON.stringify({roots:[{id:'docs',path:dir,label:'Docs'}],http:{tokenFile:'unused'}}));
   await client.connect(new StdioClientTransport({command:process.execPath,
     args:[path.resolve(process.argv[2] ?? 'dist/server.cjs'),'--stdio','--config',path.join(dir,'config.json')],stderr:'pipe'}));
-  assert.equal((await client.listTools()).tools.length, 5);
+  assert.equal((await client.listTools()).tools.length, 7);
   const result = await client.callTool({name:'read_text',arguments:{rootId:'docs',path:'document.md'}});
   assert.match(JSON.stringify(result), /portable bundled runtime/);
   console.log('Bundled stdio server initialized and read document through official MCP SDK client');

@@ -11,3 +11,6 @@ dist
 work
 *.spk
 .env*
+
+examples/write-test/*
+!examples/write-test/README.md

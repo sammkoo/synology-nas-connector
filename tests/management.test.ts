@@ -1,7 +1,7 @@
-import { test } from 'node:test';
+import { test,mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
-import { mkdtemp, mkdir, writeFile, readFile, rm, symlink, stat, realpath } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rm, symlink, stat, realpath,chmod } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -17,6 +17,37 @@ import { bridgeAction, requireAdministrator } from '../apps/dsm-bridge/src/bridg
 const secret=Buffer.alloc(32,3);
 const signed=(body=Buffer.alloc(0)): BridgeRequest=>({method:'POST',path:'/manage/roots',user:'admin',
   timestamp:String(Date.now()),nonce:randomBytes(32).toString('hex'),csrf:'',body});
+
+test('Drive connection stores only a private session and returns no password, session or physical path',async()=>{
+  const directory=await mkdtemp(path.join(tmpdir(),'nas-drive-management-'));
+  try {
+    const filename=path.join(directory,'config.json'),config=configSchema.parse({roots:[{id:'docs',label:'Docs',path:directory}],http:{tokenFile:'unused'}});
+    await writeFile(filename,JSON.stringify(config),{mode:0o600});
+    const store=await ConfigurationStore.create(filename,config,new ShareCatalog([]));
+    mock.method(globalThis,'fetch',async()=>new Response(JSON.stringify({success:true,data:{sid:'synthetic-private-session'}})));
+    const result=await store.connectDrive('https://nas.example/','connector-drive','synthetic-private-password',store.revision());
+    assert.equal(result.driveConfigured,true);assert.equal(result.roots[0]?.allowShare,undefined);
+    assert.ok(!JSON.stringify(result).includes(directory));assert.ok(!JSON.stringify(result).includes('synthetic-private'));
+    const saved=JSON.parse(await readFile(filename,'utf8'));
+    assert.equal(await readFile(saved.drive.sessionFile,'utf8'),'synthetic-private-session\n');
+    assert.equal((await stat(saved.drive.sessionFile)).mode&0o777,0o600);assert.equal((await stat(path.dirname(saved.drive.sessionFile))).mode&0o777,0o700);
+    assert.ok(!JSON.stringify(saved).includes('synthetic-private-password'));assert.ok(!JSON.stringify(saved).includes('synthetic-private-session'));
+  }finally{mock.restoreAll();await rm(directory,{recursive:true,force:true});}
+});
+test('failed Drive credential storage leaves previously enabled sharing durably disabled',async()=>{
+  const directory=await mkdtemp(path.join(tmpdir(),'nas-drive-management-'));
+  try {
+    const filename=path.join(directory,'config.json'),sessionFile=path.join(directory,'old-session');
+    await writeFile(sessionFile,'old-session',{mode:0o600});await mkdir(path.join(directory,'drive'),{mode:0o700});await chmod(path.join(directory,'drive'),0o755);
+    const config=configSchema.parse({roots:[{id:'docs',label:'Docs',path:directory,allowShare:true}],http:{tokenFile:'unused'},drive:{baseUrl:'https://nas.example/',sessionFile,linkOrigins:['https://nas.example']}});
+    await writeFile(filename,JSON.stringify(config),{mode:0o600});
+    const store=await ConfigurationStore.create(filename,config,new ShareCatalog([]));
+    mock.method(globalThis,'fetch',async()=>new Response(JSON.stringify({success:true,data:{sid:'new-session'}})));
+    await assert.rejects(store.connectDrive('https://nas.example/','connector-drive','synthetic-password',store.revision()),/PRIVATE_CONFIGURATION_REQUIRED/);
+    assert.equal((JSON.parse(await readFile(filename,'utf8'))).roots[0].allowShare,false);
+    assert.equal(store.getFiles().listRoots()[0]?.allowShare,undefined);assert.equal(await readFile(sessionFile,'utf8'),'old-session');
+  }finally{mock.restoreAll();await rm(directory,{recursive:true,force:true});}
+});
 
 test('signed management requests reject tampering, replay, old timestamps and remote callers',()=>{
   const guard=new BridgeGuard(secret); const r=signed(Buffer.from('{}'));
