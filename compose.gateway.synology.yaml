@@ -10,8 +10,9 @@ services:
     security_opt: [no-new-privileges:true]
     pids_limit: 64
     mem_limit: 512m
-    cpus: 1
-    tmpfs: [/tmp:size=16m,mode=1777]
+    # DSM kernels may lack CFS quotas; shares set priority, not a CPU cap.
+    cpu_shares: 256
+    tmpfs: ["/tmp:size=16m,mode=1777"]
     volumes:
       - gateway-config:/config:ro
       - gateway-state:/state

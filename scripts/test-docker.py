@@ -122,6 +122,14 @@ with tempfile.TemporaryDirectory() as temporary:
 
 
 # The Synology recipe uses service-owned named volumes, not NAS document mounts.
+for recipe in ["compose.gateway.synology-init.yaml", "compose.gateway.synology.yaml"]:
+    model = json.loads(run("docker", "compose", "-f", recipe, "config", "--format", "json"))
+    service = next(iter(model["services"].values()))
+    assert service["cpu_shares"] == 256 and not service.get("cpus")
+    assert service["read_only"] and service["user"] == "1000:1000"
+    assert service["cap_drop"] == ["ALL"]
+    if recipe.endswith("-init.yaml"): assert service["network_mode"] == "none"
+    else: assert service["tmpfs"] == ["/tmp:size=16m,mode=1777"] and service["network_mode"] == "host"
 run("docker","build","--target","gateway-synology","-t","nas-gateway-synology:ci",".")
 config_volume = "nas-gateway-config-ci-" + secrets.token_hex(6)
 state_volume = "nas-gateway-state-ci-" + secrets.token_hex(6)
@@ -130,7 +138,7 @@ try:
     run("docker", "volume", "create", config_volume)
     run("docker", "volume", "create", state_volume)
     initialize = ["docker", "run", "--rm", "--network=none", "--read-only", "--cap-drop=ALL",
-        "--security-opt=no-new-privileges:true", "--user", "1000:1000",
+        "--security-opt=no-new-privileges:true", "--cpu-shares=256", "--user", "1000:1000",
         "-v", config_volume+":/config", "-v", state_volume+":/state", "nas-gateway-synology:ci",
         "node", "dist/gateway.cjs", "--init", "--proxy-loopback", "--state-directory", "/state/install",
         "--issuer", "https://gateway.example/", "--callback", "https://client.example/callback"]
@@ -138,7 +146,7 @@ try:
     refused = subprocess.run(initialize, capture_output=True)
     assert refused.returncode == 1
     container = run("docker", "run", "-d", "--network=host", "--read-only", "--cap-drop=ALL",
-        "--security-opt=no-new-privileges:true", "--user", "1000:1000", "--pids-limit=64", "--memory=512m",
+        "--security-opt=no-new-privileges:true", "--cpu-shares=256", "--user", "1000:1000", "--pids-limit=64", "--memory=512m",
         "-v", config_volume+":/config:ro", "-v", state_volume+":/state", "nas-gateway-synology:ci")
     for _ in range(40):
         health = subprocess.run(["docker", "exec", container, "node", "dist/gateway.cjs", "--healthcheck"], capture_output=True)
@@ -160,6 +168,7 @@ try:
     manifest = json.loads(run("docker", "inspect", container))[0]
     assert manifest["Config"]["User"] == "1000:1000"
     assert manifest["HostConfig"]["NetworkMode"] == "host"
+    assert manifest["HostConfig"]["CpuShares"] == 256 and manifest["HostConfig"]["NanoCpus"] == 0
     assert manifest["HostConfig"]["ReadonlyRootfs"]
     assert len(manifest["Mounts"]) == 2 and all(m["Type"] == "volume" for m in manifest["Mounts"])
     assert next(m for m in manifest["Mounts"] if m["Destination"] == "/config")["RW"] is False
