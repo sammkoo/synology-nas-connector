@@ -50,6 +50,18 @@ npm run office:dev -- --config .local/office.json
 
 This is a developer stdio process, not a browser setup screen or a ChatGPT connection instruction. The local spawning process is trusted. Production integration needs NAS-side document discovery/mapping, durable document capability consent, OAuth edit scopes, relay authorization and graphical onboarding before these tools can reach the deployed ChatGPT connector.
 
+### Manual acceptance on one disposable spreadsheet
+
+`dist/office-live-acceptance.cjs` is an optional interactive acceptance runner. Run it beside the trusted official proxy at literal `127.0.0.1:3000`, with Node 22 and a disposable native spreadsheet containing `Sheet1`. It **replaces `Sheet1!A1:B2` with four synthetic values**; never select a real working document or allow concurrent collaborators.
+
+```sh
+node dist/office-live-acceptance.cjs dist/office-dev.cjs https://nas.example/ restricted-test VERIFIED_NATIVE_SPREADSHEET_ID --replace-disposable-A1-B2
+```
+
+The runner requires an interactive terminal. The human types the restricted account's password into a hidden prompt; it is not a command argument or written to disk. A short-lived private token/config directory is removed when the runner exits normally or reports an error. Use a memory-backed temporary directory and stop the disposable proxy after testing; abrupt process or host termination can prevent cleanup, and removing a local token file does not revoke the vendor session. The runner does not accept a password through environment variables or non-interactive input.
+
+It checks unauthenticated rejection, one configured alias, denial of an unconfigured alias, metadata, a bounded read, exactly one edit with separate readback, and local development configuration revocation. It stops on the first failure and never retries an uncertain edit. Output contains fixed result codes instead of credentials, document IDs or cell contents. These automated fixture tests do not replace live vendor compatibility testing.
+
 ## Verified vendor support and remaining gaps
 
 The [official proxy image](https://hub.docker.com/r/synology/spreadsheet-api) version 3.4.1 requires Office 3.7.0 or later. The Spreadsheet API runs in a separate proxy, not inside the Office package. Synology discourages running it on the same DSM as Office because spreadsheet workers consume substantial resources. A service placement and resource budget must be agreed before deployment; no service has been installed or exposed by this development change.
