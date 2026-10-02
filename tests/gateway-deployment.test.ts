@@ -71,6 +71,18 @@ test('startup rejects lost/replaced keys, changed issuer, missing database and u
   await rm(path.join(config.dataDirectory,'gateway.sqlite'));await assert.rejects(startGateway(config));
   await assert.rejects(readFile(path.join(config.dataDirectory,'gateway.sqlite')));
 });
+test('offline proxy initialization separates immutable config from private state without TLS files',async()=>{
+  const configPath=path.join(directory,'config','config.json'),state=path.join(directory,'data','install');
+  await initializeGateway(configPath,'https://gateway.example/',['https://client.example/callback'],{proxyLoopback:true,dataDirectory:state});
+  const config=await loadGatewayDeployment(configPath);
+  assert.equal(config.dataDirectory,state);
+  assert.deepEqual(config.transport,{mode:'proxy',host:'127.0.0.1',port:8788,trustedProxyAddresses:['127.0.0.1']});
+  await assert.rejects(stat(path.join(directory,'config','tls')),/ENOENT/);
+  assert.equal((await stat(state)).mode&0o777,0o700);assert.equal((await readGatewayKey(config)).length,32);
+  const original=await readFile(path.join(state,'auth.key'));
+  await assert.rejects(initializeGateway(path.join(directory,'other','config.json'),config.issuer,config.redirectUris,{proxyLoopback:true,dataDirectory:state}));
+  assert.deepEqual(await readFile(path.join(state,'auth.key')),original);
+});
 test('symlink replacements and partial installations fail closed rather than bootstrap a new identity',async()=>{
   const {configPath,config}=await initialized(),keyPath=path.join(config.dataDirectory,'auth.key'),original=await readFile(keyPath),replacement=path.join(directory,'replacement');
   await writeFile(replacement,original,{mode:0o600});await rm(keyPath);await symlink(replacement,keyPath);await assert.rejects(startGateway(config));

@@ -1,0 +1,36 @@
+# One-time initialization only. Replace example URLs with approved exact values.
+# Once it exits 0, use compose.gateway.synology.yaml; do not retry initialization
+# against an existing installation or delete its volumes to resolve an error.
+services:
+  initialize:
+    image: nas-connector-gateway:tested
+    network_mode: none
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    mem_limit: 512m
+    cpus: 1
+    command:
+      - node
+      - dist/gateway.cjs
+      - --init
+      - --proxy-loopback
+      - --config
+      - /config/config.json
+      - --state-directory
+      - /state/install
+      - --issuer
+      - https://gateway.example/
+      - --callback
+      - https://client.example/exact-callback
+    volumes:
+      - gateway-config:/config
+      - gateway-state:/state
+    restart: "no"
+volumes:
+  gateway-config:
+    name: nas-connector-gateway-config
+  gateway-state:
+    name: nas-connector-gateway-state

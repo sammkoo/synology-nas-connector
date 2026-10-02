@@ -4,22 +4,25 @@ import { startGateway,checkGatewayHealth } from '../../../packages/gateway/src/s
 async function main() {
   process.umask(0o077);
   const args=process.argv.slice(2);let configPath=process.env.NAS_GATEWAY_CONFIG,issuer:string|undefined;
-  const callbacks:string[]=[];let initialize=false,health=false;
+  const callbacks:string[]=[];let initialize=false,health=false,proxyLoopback=false,dataDirectory:string|undefined;
   for(let i=0;i<args.length;i++){
     const arg=args[i];
     if(arg==='--init'){if(initialize)throw new Error('Duplicate init');initialize=true;}
     else if(arg==='--healthcheck'){if(health)throw new Error('Duplicate healthcheck');health=true;}
-    else if(['--config','--issuer','--callback'].includes(arg??'')){
+    else if(arg==='--proxy-loopback'){if(proxyLoopback)throw new Error('Duplicate proxy option');proxyLoopback=true;}
+    else if(['--config','--issuer','--callback','--state-directory'].includes(arg??'')){
       const value=args[++i];if(!value||value.startsWith('--'))throw new Error('Missing option value');
       if(arg==='--config')configPath=value;
       else if(arg==='--issuer'){if(issuer)throw new Error('Duplicate issuer');issuer=value;}
+      else if(arg==='--state-directory'){if(dataDirectory)throw new Error('Duplicate state directory');dataDirectory=value;}
       else callbacks.push(value);
     }else throw new Error('Unknown option');
   }
-  if(!configPath||initialize&&health||!initialize&&(issuer||callbacks.length))throw new Error('Invalid command');
+  if(!configPath||initialize&&health||!initialize&&(issuer||callbacks.length||proxyLoopback||dataDirectory))throw new Error('Invalid command');
   if(initialize){
     if(!issuer||!callbacks.length)throw new Error('Explicit issuer and callbacks required');
-    await initializeGateway(configPath,issuer,callbacks);console.error('GATEWAY_INITIALIZED: configure TLS files before starting; keep state and auth.key together.');return;
+    await initializeGateway(configPath,issuer,callbacks,{proxyLoopback,dataDirectory});
+    console.error(proxyLoopback?'GATEWAY_INITIALIZED: configure the HTTPS edge before routing traffic; keep state and auth.key together.':'GATEWAY_INITIALIZED: configure TLS files before starting; keep state and auth.key together.');return;
   }
   const config=await loadGatewayDeployment(configPath);
   if(health){await checkGatewayHealth(config);return;}

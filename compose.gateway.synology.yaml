@@ -1,0 +1,24 @@
+# Import the CI-tested gateway image into Container Manager first.
+# Replace the image tag in BOTH files with that exact imported build.
+services:
+  gateway:
+    image: nas-connector-gateway:tested
+    network_mode: host
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    mem_limit: 512m
+    cpus: 1
+    tmpfs: [/tmp:size=16m,mode=1777]
+    volumes:
+      - gateway-config:/config:ro
+      - gateway-state:/state
+    stop_grace_period: 10s
+    restart: unless-stopped
+volumes:
+  gateway-config:
+    name: nas-connector-gateway-config
+  gateway-state:
+    name: nas-connector-gateway-state

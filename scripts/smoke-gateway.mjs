@@ -39,6 +39,13 @@ async function http(route,body) {
   });
 }
 try{
+  const separate=path.join(directory,'proxy'),proxyConfig=path.join(separate,'config','config.json'),proxyState=path.join(separate,'state','install');
+  assert.equal(command(['--init','--proxy-loopback','--config',proxyConfig,'--state-directory',proxyState,'--issuer',issuer,'--callback',callback]).status,0);
+  const proxy=JSON.parse(await readFile(proxyConfig,'utf8'));
+  assert.equal(proxy.dataDirectory,proxyState);assert.equal(proxy.transport.mode,'proxy');assert.equal(proxy.transport.host,'127.0.0.1');
+  assert.equal((await readFile(path.join(proxyState,'auth.key'))).length,32);
+  for(const args of [['--config',proxyConfig,'--proxy-loopback'],['--config',proxyConfig,'--state-directory',proxyState],['--init','--proxy-loopback','--proxy-loopback','--config',proxyConfig,'--issuer',issuer,'--callback',callback]])assert.equal(command(args).status,1);
+  assert.equal(command(['--init','--proxy-loopback','--config',proxyConfig,'--state-directory',proxyState,'--issuer',issuer,'--callback',callback]).status,1);
   const initialized=command(['--init','--config',configPath,'--issuer',issuer,'--callback',callback]);assert.equal(initialized.status,0);
   const certPath=path.join(directory,'tls','cert.pem'),keyPath=path.join(directory,'tls','key.pem');
   const generated=spawnSync('openssl',['req','-x509','-newkey','ec','-pkeyopt','ec_paramgen_curve:prime256v1','-nodes','-days','2','-subj','/CN=localhost',

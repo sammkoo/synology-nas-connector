@@ -51,13 +51,15 @@ const keyDigest=(key:Buffer)=>createHash('sha256').update('nas-gateway-key-v1\0'
 const identitySchema=z.object({version:z.literal(1),issuer:httpsOrigin,keyDigest:z.string().regex(/^[a-f0-9]{64}$/)}).strict();
 
 /** Explicit first-install operation. Never recreate a missing key during startup. */
-export async function initializeGateway(configPath:string,issuer:string,redirectUris:string[]) {
-  const config=gatewayDeploymentSchema.parse({issuer,redirectUris,dataDirectory:'state',transport:{mode:'https',certificateFile:'tls/cert.pem',privateKeyFile:'tls/key.pem'}});
-  const directory=await privateGatewayDirectory(path.dirname(path.resolve(configPath))),state=path.join(directory,'state');
+export async function initializeGateway(configPath:string,issuer:string,redirectUris:string[],options:{proxyLoopback?:boolean;dataDirectory?:string}={}) {
+  const config=gatewayDeploymentSchema.parse({issuer,redirectUris,dataDirectory:options.dataDirectory??'state',transport:options.proxyLoopback
+    ?{mode:'proxy',host:'127.0.0.1',port:8788,trustedProxyAddresses:['127.0.0.1']}
+    :{mode:'https',certificateFile:'tls/cert.pem',privateKeyFile:'tls/key.pem'}});
+  const directory=await privateGatewayDirectory(path.dirname(path.resolve(configPath))),state=path.resolve(directory,config.dataDirectory);
   for(const file of [configPath,state]){
     const exists=await lstat(file).then(()=>true,e=>{if(e.code==='ENOENT')return false;throw e;});if(exists)throw new Error('Existing gateway installation; refusing to overwrite');
   }
-  await privateGatewayDirectory(state);await privateGatewayDirectory(path.join(directory,'tls'));
+  await privateGatewayDirectory(state);if(!options.proxyLoopback)await privateGatewayDirectory(path.join(directory,'tls'));
   const key=randomBytes(32);
   try{
     await writeNewPrivate(path.join(state,'auth.key'),key);

@@ -119,3 +119,58 @@ with tempfile.TemporaryDirectory() as temporary:
         raise
     finally:
         subprocess.run(['docker','rm','-f',container],check=True,stdout=subprocess.DEVNULL)
+
+
+# The Synology recipe uses service-owned named volumes, not NAS document mounts.
+config_volume = "nas-gateway-config-ci-" + secrets.token_hex(6)
+state_volume = "nas-gateway-state-ci-" + secrets.token_hex(6)
+container = None
+try:
+    run("docker", "volume", "create", config_volume)
+    run("docker", "volume", "create", state_volume)
+    initialize = ["docker", "run", "--rm", "--network=none", "--read-only", "--cap-drop=ALL",
+        "--security-opt=no-new-privileges:true", "--user", "1000:1000",
+        "-v", config_volume+":/config", "-v", state_volume+":/state", "nas-gateway:ci",
+        "node", "dist/gateway.cjs", "--init", "--proxy-loopback", "--state-directory", "/state/install",
+        "--issuer", "https://gateway.example/", "--callback", "https://client.example/callback"]
+    run(*initialize)
+    refused = subprocess.run(initialize, capture_output=True)
+    assert refused.returncode == 1
+    container = run("docker", "run", "-d", "--network=host", "--read-only", "--cap-drop=ALL",
+        "--security-opt=no-new-privileges:true", "--user", "1000:1000", "--pids-limit=64", "--memory=512m",
+        "-v", config_volume+":/config:ro", "-v", state_volume+":/state", "nas-gateway:ci")
+    for _ in range(40):
+        health = subprocess.run(["docker", "exec", container, "node", "dist/gateway.cjs", "--healthcheck"], capture_output=True)
+        if health.returncode == 0: break
+        time.sleep(0.2)
+    else: raise AssertionError("named-volume proxy gateway failed to start")
+    def proxy_status(headers):
+        request = urllib.request.Request("http://127.0.0.1:8788/health", headers={"Host":"gateway.example", **headers})
+        try:
+            with urllib.request.urlopen(request, timeout=3) as response: return response.status
+        except urllib.error.HTTPError as response: return response.code
+    assert proxy_status({}) == 403
+    assert proxy_status({"X-Forwarded-Proto":"https", "X-Forwarded-For":"127.0.0.1, 192.0.2.1"}) == 403
+    assert proxy_status({"X-Forwarded-Proto":"https", "X-Forwarded-For":"192.0.2.1"}) == 200
+    for file in ["/config/config.json", "/config/new-file", "/data/private-document"]:
+        blocked = subprocess.run(["docker", "exec", container, "node", "-e",
+            "require(\"fs\").writeFileSync("+json.dumps(file)+",\"must fail\")"], capture_output=True)
+        assert blocked.returncode != 0
+    manifest = json.loads(run("docker", "inspect", container))[0]
+    assert manifest["Config"]["User"] == "1000:1000"
+    assert manifest["HostConfig"]["NetworkMode"] == "host"
+    assert manifest["HostConfig"]["ReadonlyRootfs"]
+    assert len(manifest["Mounts"]) == 2 and all(m["Type"] == "volume" for m in manifest["Mounts"])
+    assert next(m for m in manifest["Mounts"] if m["Destination"] == "/config")["RW"] is False
+    snapshot = "const f=require(\"fs\");const c=require(\"crypto\");console.log(c.createHash(\"sha256\").update(f.readFileSync(\"/state/install/auth.key\")).digest(\"hex\"))"
+    original = run("docker", "exec", container, "node", "-e", snapshot)
+    run("docker", "restart", container)
+    for _ in range(40):
+        if subprocess.run(["docker", "exec", container, "node", "dist/gateway.cjs", "--healthcheck"], capture_output=True).returncode == 0: break
+        time.sleep(0.2)
+    else: raise AssertionError("named-volume restart failed")
+    assert run("docker", "exec", container, "node", "-e", snapshot) == original
+    print("Synology named-volume offline initialization, UID 1000, read-only config, loopback proxy and restart verified")
+finally:
+    if container: subprocess.run(["docker", "rm", "-f", container], check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(["docker", "volume", "rm", config_volume, state_volume], check=True, stdout=subprocess.DEVNULL)

@@ -86,6 +86,16 @@ docker build --target gateway -t nas-connector-gateway .
 
 The ordinary Docker build still defaults to the local NAS connector. Both bundles have their dependency license notices in `dist/`; the gateway uses `GATEWAY_THIRD_PARTY_NOTICES.txt`. Optional native WebSocket accelerators are not bundled or required. The existing CI Docker smoke script additionally builds and starts the gateway target, exercises real verified TLS and OAuth discovery/catalog, rejects anonymous data access, checks read-only config and verifies a container restart with persistent state.
 
+## Synology Container Manager with an existing DSM TLS edge
+
+Use [compose.gateway.synology-init.yaml](../compose.gateway.synology-init.yaml) once, then [compose.gateway.synology.yaml](../compose.gateway.synology.yaml) for the service. CI exports a tested Linux amd64 image as the `gateway-image-amd64` artifact, with a checksum and an image tag containing the source commit. Import that archive in Container Manager and use its exact tag in both files. Other NAS architectures need their own build and runtime validation.
+
+Replace the example issuer and callback with the approved exact values before initialization. `--init --proxy-loopback --state-directory /state/install` generates fresh credentials offline, without TLS files, and refuses existing state. Empty named Docker volumes inherit the image's private directories under its `node` UID/GID 1000, avoiding guessed DSM user IDs or root permission-repair scripts. Initialization mounts the configuration and state volumes writable; runtime mounts configuration read-only and only state writable. Neither mounts NAS shares or the Docker socket. Back up these volumes together; never delete/reinitialize them as a troubleshooting shortcut.
+
+Runtime uses host networking so `127.0.0.1:8788` is the NAS loopback visible to DSM's reverse proxy. This also lets the process contact other NAS/local-network services, so approve that network scope explicitly. The only listener is loopback; public routing belongs to a dedicated DSM HTTPS hostname/certificate and no container port is published. Retain the existing DSM hostname route. Set edge provenance headers as described above and enable WebSocket upgrades before pairing. A running container does not verify certificates, edge headers or the client's actual callback.
+
+Create the initialization project in Container Manager using the prepared init file; a stopped container with exit code 0 is expected. Inspect its fixed initialization status, then update that project's Compose definition to the runtime file and start it, preserving the explicitly named volumes. Do not initialize on subsequent starts. Docker CI verifies named-volume permissions, offline initialization, retry refusal, configuration write denial, proxy provenance and persistent identity across restart.
+
 ## Lifetime, backups and recovery
 
 The SQLite connection holds an exclusive lock for its entire lifetime. A second gateway using that state fails startup; the OS releases the lock after process termination, so no stale lock-file deletion is required. SIGTERM/SIGINT stop accepting connections, disconnect relay channels, drain HTTP work for at most five seconds and close the database. NAS agents reconnect and existing unexpired grants remain device-bound.
