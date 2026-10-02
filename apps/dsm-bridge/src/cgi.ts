@@ -15,6 +15,9 @@ async function main() {
         size += chunk.length;
         if (size > length) throw new ManagementError('INVALID_BODY');
         chunks.push(Buffer.from(chunk));
+        // CGI supplies a bounded body, but the server may keep stdin open.
+        // Stop at CONTENT_LENGTH instead of waiting for an unrelated EOF.
+        if (size === length) break;
       }} finally {clearTimeout(timeout);}
       if (size !== length) throw new ManagementError('INVALID_BODY');
     }

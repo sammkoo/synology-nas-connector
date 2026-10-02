@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { once } from 'node:events';
 import path from 'node:path';
 
 // Exercise the packaged CGI entry point, without DSM credentials or NAS files.
@@ -33,4 +34,29 @@ for (const scenario of cases) {
   assert.deepEqual(JSON.parse(processResult.stdout.slice(separator + 4)),
     { error: scenario.error,...(scenario.httpStatus ? {httpStatus:scenario.httpStatus} : {}) });
 }
-console.log('Bundled CGI emitted valid status/JSON headers for unauthenticated, oversized, truncated and failed authentication-helper requests');
+// A CGI server need not close stdin after delivering CONTENT_LENGTH bytes.
+// Keep this real child process's input open: authentication must still start.
+const pending = spawn(process.execPath,
+  [path.resolve('dist/dsm-bridge.cjs'), path.resolve('dist/absent-smoke-config.json')], {
+    env: {PATH:'/usr/bin:/bin',REQUEST_METHOD:'POST',QUERY_STRING:'action=roots',
+      REMOTE_ADDR:'127.0.0.1',CONTENT_LENGTH:'2',CONTENT_TYPE:'application/json',
+      HTTP_HOST:'fixture.invalid',HTTP_ORIGIN:'https://fixture.invalid',
+      HTTP_COOKIE:'fixture-only-invalid-cookie'},stdio:['pipe','pipe','pipe']
+  });
+let output='',stderr='';
+pending.stdout.setEncoding('utf8');pending.stderr.setEncoding('utf8');
+pending.stdout.on('data',chunk=>{output+=chunk;});
+pending.stderr.on('data',chunk=>{stderr+=chunk;});
+pending.stdin.on('error',()=>{});
+const deadline=setTimeout(()=>pending.kill(),10000);
+try {
+  pending.stdin.write('{}'); // Deliberately never end stdin before the response.
+  const [code,signal]=await once(pending,'close');
+  assert.equal(signal,null);assert.equal(code,0);assert.equal(stderr,'');
+  const separator=output.indexOf('\r\n\r\n');
+  assert.ok(separator>0);
+  assert.equal(output.slice(0,separator).split('\r\n')[0],'Status: 200 OK');
+  assert.deepEqual(JSON.parse(output.slice(separator+4)),
+    {error:'DSM_AUTH_HELPER_MISSING',httpStatus:503});
+} finally {clearTimeout(deadline);pending.stdin.destroy();}
+console.log('Bundled CGI passed 5 scenarios, including a complete POST body with stdin kept open');
