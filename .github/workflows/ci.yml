@@ -34,3 +34,16 @@ jobs:
       - uses: actions/checkout@v4
       - run: docker build -t nas-connector:ci .
       - run: python3 scripts/test-docker.py
+      - name: Export tested gateway image for offline NAS import
+        run: |
+          mkdir -p gateway-image
+          docker tag nas-gateway-synology:ci nas-connector-gateway:git-${GITHUB_SHA}
+          docker save nas-connector-gateway:git-${GITHUB_SHA} | gzip -n > gateway-image/nas-connector-gateway.tar.gz
+          cd gateway-image
+          sha256sum nas-connector-gateway.tar.gz > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gateway-image-amd64
+          path: gateway-image/*
+          if-no-files-found: error
+          retention-days: 14
