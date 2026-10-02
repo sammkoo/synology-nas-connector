@@ -1,6 +1,11 @@
 node_modules
 .git
 .local
+.gateway
+*.key
+*.pem
+*.sqlite
+*.sqlite-*
 artifacts
 dist
 work

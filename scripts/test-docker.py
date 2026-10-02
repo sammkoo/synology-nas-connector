@@ -122,6 +122,7 @@ with tempfile.TemporaryDirectory() as temporary:
 
 
 # The Synology recipe uses service-owned named volumes, not NAS document mounts.
+run("docker","build","--target","gateway-synology","-t","nas-gateway-synology:ci",".")
 config_volume = "nas-gateway-config-ci-" + secrets.token_hex(6)
 state_volume = "nas-gateway-state-ci-" + secrets.token_hex(6)
 container = None
@@ -130,7 +131,7 @@ try:
     run("docker", "volume", "create", state_volume)
     initialize = ["docker", "run", "--rm", "--network=none", "--read-only", "--cap-drop=ALL",
         "--security-opt=no-new-privileges:true", "--user", "1000:1000",
-        "-v", config_volume+":/config", "-v", state_volume+":/state", "nas-gateway:ci",
+        "-v", config_volume+":/config", "-v", state_volume+":/state", "nas-gateway-synology:ci",
         "node", "dist/gateway.cjs", "--init", "--proxy-loopback", "--state-directory", "/state/install",
         "--issuer", "https://gateway.example/", "--callback", "https://client.example/callback"]
     run(*initialize)
@@ -138,7 +139,7 @@ try:
     assert refused.returncode == 1
     container = run("docker", "run", "-d", "--network=host", "--read-only", "--cap-drop=ALL",
         "--security-opt=no-new-privileges:true", "--user", "1000:1000", "--pids-limit=64", "--memory=512m",
-        "-v", config_volume+":/config:ro", "-v", state_volume+":/state", "nas-gateway:ci")
+        "-v", config_volume+":/config:ro", "-v", state_volume+":/state", "nas-gateway-synology:ci")
     for _ in range(40):
         health = subprocess.run(["docker", "exec", container, "node", "dist/gateway.cjs", "--healthcheck"], capture_output=True)
         if health.returncode == 0: break

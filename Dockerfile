@@ -25,14 +25,16 @@ HEALTHCHECK --interval=30s --timeout=3s CMD node -e "fetch('http://127.0.0.1:878
 CMD ["node", "dist/server.cjs"]
 
 FROM runtime AS gateway
-USER root
-# Empty named volumes inherit these private directories and the service owner.
-RUN mkdir -p /config /state && chown node:node /config /state && chmod 700 /config /state
-USER node
 ENV NAS_GATEWAY_CONFIG=/config/config.json WS_NO_BUFFER_UTIL=1 WS_NO_UTF_8_VALIDATE=1
 EXPOSE 8788
 HEALTHCHECK --interval=30s --timeout=4s CMD node dist/gateway.cjs --healthcheck
 CMD ["node", "dist/gateway.cjs"]
+
+FROM gateway AS gateway-synology
+USER root
+# Empty named volumes inherit these private directories and the service owner.
+RUN mkdir -p /config /state && chown node:node /config /state && chmod 700 /config /state
+USER node
 
 # Preserve the existing default NAS image; gateway is selected with --target.
 FROM runtime AS connector
