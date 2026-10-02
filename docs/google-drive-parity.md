@@ -2,6 +2,8 @@
 
 The target experience is one ChatGPT connection for discovering, reading, creating, editing, organizing and sharing authorized NAS files. The current connector is not feature-equivalent to Google Drive. A green build or similarly named tools does not establish equivalence.
 
+The user selected **native Synology Office** as the document surface. The [Office development integration](synology-office.md) now implements bounded native Spreadsheet metadata and cell reads/edits behind explicit document bindings; it is not connected to the deployed DSM/gateway. Ordinary Office file support remains a separate compatibility path.
+
 | Workflow | Current connector | Required acceptance evidence |
 | --- | --- | --- |
 | Find files | Bounded filename search and folder listing | Content/type search, recent files, explicit partial results |

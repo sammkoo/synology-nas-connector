@@ -184,3 +184,6 @@ try:
 finally:
     if container: subprocess.run(["docker", "rm", "-f", container], check=True, stdout=subprocess.DEVNULL)
     subprocess.run(["docker", "volume", "rm", config_volume, state_volume], check=True, stdout=subprocess.DEVNULL)
+
+# Test the optional vendor proxy on this ephemeral Linux runner, never on the user's NAS.
+print(run('python3', 'scripts/test-office-proxy.py'))

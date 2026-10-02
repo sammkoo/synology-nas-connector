@@ -6,6 +6,8 @@ Independent, MIT-licensed **v0.2 developer preview**. An MCP server for selected
 
 **Product target:** a Google Drive-like ChatGPT experience for authorized NAS files. Broader formats, edits, organization, revisions and permission-changing sharing remain missing. The [capability matrix](docs/google-drive-parity.md) distinguishes implemented behavior, verified vendor support and remaining work.
 
+**Native Office development:** an optional [Synology Spreadsheet client and stdio MCP preview](docs/synology-office.md) supports selected native sheets and bounded cell reads/edits. It is not installed in DSM or exposed through the production gateway. Native text-document and presentation editing are still unverified.
+
 **Release status:** the published build 0009 remains the read-only preview. The new v0.2 build 0010 passed Linux CI and still requires live mutation/Drive acceptance checks before deployment. A successful package build does not prove DSM/Drive compatibility. “Sign in with ChatGPT” identity and public directory acceptance are not implemented.
 
 The [gateway](docs/gateway-deployment.md) and NAS connection controller are exercised together through real local TLS. The gateway stores ownership/grant state but does not persist document contents. Runtime mutations ask the gateway to revalidate consent before the NAS commits. Operators must validate TLS, ACLs, Drive mapping and real client behavior on their own deployment.
