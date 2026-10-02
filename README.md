@@ -4,7 +4,9 @@ Independent, MIT-licensed **v0.2 developer preview**. An MCP server for selected
 
 **Implemented:** folder listing, filename search, metadata and bounded UTF-8 reads; optional exclusive `create_file` and `create_drive_link`; MCP stdio and stateless Streamable HTTP; authenticated DSM management, gateway pairing and per-device OAuth grants. See [creation and Drive-link setup, limits and acceptance checks](docs/create-and-drive-links.md). Drive links preserve existing permissions and do not enable public access.
 
-**Release status:** the published build 0009 remains the read-only preview. The new v0.2 build 0010 must pass Linux CI and live mutation/Drive acceptance checks before deployment. A successful package build does not prove DSM/Drive compatibility. “Sign in with ChatGPT” identity and public directory acceptance are not implemented.
+**Product target:** a Google Drive-like ChatGPT experience for authorized NAS files. Broader formats, edits, organization, revisions and permission-changing sharing remain missing. The [capability matrix](docs/google-drive-parity.md) distinguishes implemented behavior, verified vendor support and remaining work.
+
+**Release status:** the published build 0009 remains the read-only preview. The new v0.2 build 0010 passed Linux CI and still requires live mutation/Drive acceptance checks before deployment. A successful package build does not prove DSM/Drive compatibility. “Sign in with ChatGPT” identity and public directory acceptance are not implemented.
 
 The [gateway](docs/gateway-deployment.md) and NAS connection controller are exercised together through real local TLS. The gateway stores ownership/grant state but does not persist document contents. Runtime mutations ask the gateway to revalidate consent before the NAS commits. Operators must validate TLS, ACLs, Drive mapping and real client behavior on their own deployment.
 
