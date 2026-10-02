@@ -11,9 +11,11 @@ export function hiddenPassword():Promise<string>{
   if(!process.stdin.isTTY||!process.stdout.isTTY)throw new Error('INTERACTIVE_TERMINAL_REQUIRED');
   return new Promise((resolve,reject)=>{
     let value='';const raw=process.stdin.isRaw;
+    // DSM reverse proxies may close an idle WebSocket while the user enters a hidden password.
+    const heartbeat=setInterval(()=>process.stdout.write('\nWaiting for test account password (hidden): '),20000);
     const timeout=setTimeout(()=>{cleanup();value='';reject(new Error('PASSWORD_ENTRY_TIMEOUT'));},120000);
     const ended=()=>{cleanup();value='';reject(new Error('TERMINAL_DISCONNECTED'));};
-    const cleanup=()=>{clearTimeout(timeout);process.stdin.off('keypress',input);process.stdin.off('end',ended);
+    const cleanup=()=>{clearTimeout(timeout);clearInterval(heartbeat);process.stdin.off('keypress',input);process.stdin.off('end',ended);
       try{process.stdin.setRawMode(raw);}catch{/* A disconnected terminal cannot restore its mode. */}
       process.stdin.pause();process.stdout.write('\n');};
     const input=(text:string,key:{name?:string,ctrl?:boolean})=>{
