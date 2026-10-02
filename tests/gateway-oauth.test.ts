@@ -35,6 +35,27 @@ test('public client registration rejects unknown callbacks, extra scopes and cre
   assert.throws(()=>provider.beginAuthorization(client,{redirectUri:callback,codeChallenge:challenge,state:'x'}));
   assert.throws(()=>provider.beginAuthorization(client,{redirectUri:callback,resource:new URL('https://other.example/mcp'),codeChallenge:challenge,state:'x'}));
 });
+test('create and share consent requires matching NAS capabilities; old read grants never gain writes',async()=>{
+  const old=await tokens();
+  const create=authorization(['nas:read','nas:create']);
+  assert.throws(()=>provider.approveAuthorization(create,'owner',device,['docs']));
+  provider.setDeviceManifest(device,'owner',[{id:'docs',label:'Docs',allowCreate:true,allowShare:true},{id:'media',label:'Media'}]);
+  await assert.rejects(provider.verifyAccessToken(old.access_token));
+  assert.throws(()=>provider.approveAuthorization(create,'owner',device,['media']));
+  const code=new URL(provider.approveAuthorization(create,'owner',device,['docs'])).searchParams.get('code')!;
+  const grant=await provider.exchangeAuthorizationCode(client,code,verifier,callback,new URL(resource));
+  assert.equal(grant.scope,'nas:read nas:create');
+  await assert.rejects(provider.exchangeRefreshToken(client,grant.refresh_token!,['nas:read','nas:create','nas:share'],new URL(resource)));
+  const renewed=await provider.exchangeRefreshToken(client,grant.refresh_token!,['nas:create','nas:read'],new URL(resource));
+  assert.deepEqual((await provider.verifyAccessToken(renewed.access_token)).scopes,['nas:read','nas:create']);
+  provider.setDeviceManifest(device,'owner',[{id:'docs',label:'Docs',allowShare:true},{id:'media',label:'Media'}]);
+  await assert.rejects(provider.verifyAccessToken(renewed.access_token));
+  provider.setDeviceManifest(device,'owner',[{id:'docs',label:'Docs',allowCreate:true,allowShare:true},{id:'media',label:'Media'}]);
+  await assert.rejects(provider.verifyAccessToken(renewed.access_token));
+  const share=authorization(['nas:read','nas:share']);
+  assert.throws(()=>provider.approveAuthorization(share,'owner',device,['media']));
+  assert.match(provider.approveAuthorization(share,'owner',device,['docs']),/code=/);
+});
 test('consent cannot claim another account, device or unselected folder; approved handle is one-time',()=>{
   const handle=authorization();
   const other=provider.registerDevice('other','Other NAS',['docs']);

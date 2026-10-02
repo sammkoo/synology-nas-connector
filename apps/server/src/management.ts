@@ -2,6 +2,7 @@ import express from 'express';
 import { z } from 'zod';
 import { BridgeGuard, ManagementError, type ConfigurationStore,type NasConnectionController } from '../../../packages/management/src/index.js';
 import { GatewayClientError } from '../../../packages/relay/src/gateway-client.js';
+import { NasError } from '../../../packages/core/src/index.js';
 
 export function managementRouter(store: ConfigurationStore, guard: BridgeGuard,connection?:NasConnectionController) {
   const router = express.Router();
@@ -28,6 +29,24 @@ export function managementRouter(store: ConfigurationStore, guard: BridgeGuard,c
       const body = z.object({ids:z.array(z.string().regex(/^share_[a-f0-9]{20}$/)).max(20),
         revision:z.string().regex(/^[a-f0-9]{64}$/)}).strict().parse(JSON.parse(req.body.toString('utf8')));
       res.json({...(await store.saveRoots(body.ids,body.revision)),...(connection?{connection:connection.status(res.locals.user)}:{})});
+    } catch(e){next(e);}
+  });
+  router.post('/creation',async(req,res,next)=>{
+    try {
+      const body=z.object({rootId:z.string().regex(/^share_[a-f0-9]{20}$/),allowCreate:z.boolean(),revision:z.string().regex(/^[a-f0-9]{64}$/)}).strict().parse(JSON.parse(req.body.toString('utf8')));
+      res.json({...(await store.saveCreation(body.rootId,body.allowCreate,body.revision)),...(connection?{connection:connection.status(res.locals.user)}:{})});
+    } catch(e){next(e);}
+  });
+  router.post('/drive-connect',async(req,res,next)=>{
+    try {
+      const body=z.object({baseUrl:z.string().url().max(2048),account:z.string().min(1).max(128),passwd:z.string().min(1).max(1024),revision:z.string().regex(/^[a-f0-9]{64}$/)}).strict().parse(JSON.parse(req.body.toString('utf8')));
+      res.json({...(await store.connectDrive(body.baseUrl,body.account,body.passwd,body.revision)),...(connection?{connection:connection.status(res.locals.user)}:{})});
+    } catch(e){next(e);}
+  });
+  router.post('/sharing',async(req,res,next)=>{
+    try {
+      const body=z.object({rootId:z.string().regex(/^share_[a-f0-9]{20}$/),allowShare:z.boolean(),revision:z.string().regex(/^[a-f0-9]{64}$/)}).strict().parse(JSON.parse(req.body.toString('utf8')));
+      res.json({...(await store.saveSharing(body.rootId,body.allowShare,body.revision)),...(connection?{connection:connection.status(res.locals.user)}:{})});
     } catch(e){next(e);}
   });
   router.post('/preview',async(req,res,next)=>{
@@ -58,7 +77,7 @@ export function managementRouter(store: ConfigurationStore, guard: BridgeGuard,c
   router.use((_req,res)=>{res.status(404).json({error:'UNKNOWN_MANAGEMENT_ACTION'});});
   router.use((e: unknown,_req:express.Request,res:express.Response,_next:express.NextFunction)=>{
     const status = e instanceof ManagementError ? e.status : 400;
-    res.status(status).json({error:e instanceof ManagementError||e instanceof GatewayClientError ? e.code : 'MANAGEMENT_REQUEST_FAILED'});
+    res.status(status).json({error:e instanceof ManagementError||e instanceof GatewayClientError||e instanceof NasError ? e.code : 'MANAGEMENT_REQUEST_FAILED'});
   });
   return router;
 }

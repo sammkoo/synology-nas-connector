@@ -55,3 +55,7 @@ An isolated local browser fixture exercised native HTML forms from code entry to
 Real TLS relay tests additionally exercise the data resource, wire-level OAuth `securitySchemes` and runtime authentication challenges. The public registration now keeps its client valid across long-lived connections; a 91-day regression verifies reauthorization without `invalid_client`.
 
 Verified references (MCP authentication rechecked 2026-10-01; other references 2026-09-30): [OpenAI MCP authentication](https://developers.openai.com/plugins/build/auth), [MCP authorization specification](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization), [OpenAI website identity](https://developers.openai.com/siwc/website), [Node SQLite API](https://nodejs.org/api/sqlite.html).
+
+## Optional v0.2 scopes
+
+Discovery supports `nas:read`, `nas:create` and `nas:share`. Requests must include `nas:read`; only scopes actually requested and confirmed are issued. NAS signed manifests advertise opt-in per-folder capabilities. Consent offers only folders satisfying all requested capabilities, with boxes unchecked and clear read/create/Drive-link wording. Refresh cannot add scopes or change the approved scope set. Capability changes invalidate old grants for that folder, including after re-enabling. Drive link access itself remains governed by Drive permissions.

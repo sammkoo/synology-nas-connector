@@ -3,7 +3,7 @@ import { constants } from 'node:fs';
 import { lstat,mkdir,open,rename,unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
-import type { ReadOnlyFiles } from '../../core/src/index.js';
+import type { FileOperations } from '../../core/src/index.js';
 import { GatewayAgentClient,GatewayClientError,NasRelayAgent,loadOrCreateRelayIdentity,canonicalGatewayIssuer,
   pairingApprovalMessage,deviceRevocationMessage,type PairingProof,type GatewayClientTrust } from '../../relay/src/index.js';
 import { ManagementError } from './bridge-auth.js';
@@ -12,7 +12,7 @@ const recordSchema=z.object({version:z.literal(1),issuer:z.string().url().refine
   label:z.string().min(1).max(100),deviceId:z.string().uuid(),publicKey:z.string().regex(/^[A-Za-z0-9_-]{59}$/),
   enabled:z.boolean(),revocationPending:z.boolean()}).strict().refine(v=>!v.enabled||!v.revocationPending);
 type Record=z.infer<typeof recordSchema>;
-type Pending={id:string;user:string;files:ReadOnlyFiles;client:GatewayAgentClient;identity:Awaited<ReturnType<typeof loadOrCreateRelayIdentity>>;
+type Pending={id:string;user:string;files:FileOperations;client:GatewayAgentClient;identity:Awaited<ReturnType<typeof loadOrCreateRelayIdentity>>;
   label:string;rootIds:string[];deviceCode:string;userCode:string;verificationUri:string;expiresAt:number;proof?:PairingProof;confirmed?:boolean};
 const proofHash=(proof:PairingProof)=>createHash('sha256').update(pairingApprovalMessage(proof)).digest('hex');
 
@@ -20,7 +20,7 @@ const proofHash=(proof:PairingProof)=>createHash('sha256').update(pairingApprova
 export class NasConnectionController {
   private record?:Record;private pending?:Pending;private agent?:NasRelayAgent;private error?:string;
   private tail:Promise<void>=Promise.resolve();private queued=0;private stopping=false;
-  constructor(private readonly directory:string,private readonly source:()=>ReadOnlyFiles,private readonly trust:GatewayClientTrust={}) {}
+  constructor(private readonly directory:string,private readonly source:()=>FileOperations,private readonly trust:GatewayClientTrust={}) {}
   private get filename(){return path.join(this.directory,'connection.json');}
   private serial<T>(operation:()=>Promise<T>) {
     if(this.stopping)return Promise.reject(new ManagementError('CONNECTION_STOPPED',503));
@@ -87,7 +87,7 @@ export class NasConnectionController {
     this.agent=new NasRelayAgent({issuer:client.issuer,privateKey,expectedDeviceId:record.deviceId,source:this.source,
       trust:{...this.trust,lookup:client.lookup}});this.agent.start();
   }
-  begin(user:string,issuer:string,label:string,expectedFiles:ReadOnlyFiles) {
+  begin(user:string,issuer:string,label:string,expectedFiles:FileOperations) {
     return this.serial(async()=>{
       if(expectedFiles!==this.source())throw new ManagementError('CONFIGURATION_CHANGED',409);
       if(this.error==='CONNECTION_RESTORE_FAILED')throw new ManagementError(this.error,503);

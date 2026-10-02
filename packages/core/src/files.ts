@@ -1,12 +1,12 @@
 import { constants } from 'node:fs';
-import { open, lstat, realpath, opendir } from 'node:fs/promises';
+import { open, lstat, realpath, opendir, link, unlink } from 'node:fs/promises';
+import { randomUUID, createHash } from 'node:crypto';
 import type { FileHandle } from 'node:fs/promises';
 import path from 'node:path';
 import type { Config } from './config.js';
-
-export class NasError extends Error {
-  constructor(public readonly code: string) { super(code); }
-}
+import { SynologyDrive } from './drive.js';
+import { NasError } from './errors.js';
+export { NasError } from './errors.js';
 const textExtensions = new Set(['.txt', '.md', '.csv', '.tsv', '.json', '.xml', '.yaml', '.yml', '.log', '.rst']);
 const sensitiveExtensions = new Set(['.pem', '.key', '.p12', '.pfx', '.kdbx', '.db', '.sqlite', '.sqlite3']);
 const privateNames = new Set(['#recycle', '#snapshot', 'node_modules', 'id_rsa', 'id_ed25519', 'credentials', 'secrets', 'token']);
@@ -15,7 +15,8 @@ export type Entry = {rootId: string; path: string; name: string; type: 'director
 
 /** No DSM credentials or web API needed: DSM ACLs govern the package user's mounted shares. */
 export class NasFiles {
-  private constructor(private readonly config: Config, private readonly roots: Root[]) {}
+  private readonly drive?:SynologyDrive;
+  private constructor(private readonly config: Config, private readonly roots: Root[]) {if(config.drive)this.drive=new SynologyDrive(config.drive);}
   static async create(config: Config): Promise<NasFiles> {
     const roots: Root[] = [];
     for (const r of config.roots) {
@@ -27,7 +28,54 @@ export class NasFiles {
     }
     return new NasFiles(config, roots);
   }
-  listRoots() { return this.roots.map(({id, label}) => ({id, label})); }
+  listRoots() { return this.roots.map(({id, label, allowCreate,allowShare}) => ({id, label,...(allowCreate?{allowCreate:true as const}:{}),...(allowShare&&this.drive?{allowShare:true as const}:{})})); }
+  async createDriveLink(rootId:string,relative:string,signal?:AbortSignal,beforeCommit?:()=>Promise<void>) {
+    const root=this.roots.find(r=>r.id===rootId);
+    if(!root?.allowShare||!this.drive)throw new NasError('SHARE_DENIED');
+    this.segments(relative);if(!relative)throw new NasError('PATH_DENIED');
+    // Share mapping is limited to top-level DSM shared folders, never arbitrary Drive IDs from clients.
+    if(!/^\/volume[1-9]\d*\/[^/]+$/.test(root.canonical))throw new NasError('DRIVE_PATH_MISMATCH');
+    return this.withHandle(rootId,relative,false,async(_handle,ref)=>{
+      const physicalPath=await realpath(ref);
+      if(physicalPath!==path.join(root.canonical,relative))throw new NasError('PATH_DENIED');
+      const value=await this.drive!.createLink(`/team-folders/${path.basename(root.canonical)}/${relative}`,physicalPath,signal,beforeCommit);
+      return {rootId,path:relative,...value};
+    });
+  }
+  /** Linux directory descriptors pin the destination. Publishing uses link(), never rename/overwrite. */
+  async createFile(rootId:string,relative:string,content:string,signal?:AbortSignal,beforeCommit?:()=>Promise<void>) {
+    const root=this.roots.find(r=>r.id===rootId);
+    if(!root?.allowCreate)throw new NasError('CREATE_DENIED');
+    if(signal?.aborted)throw new NasError('CANCELLED');
+    const parts=this.segments(relative),name=parts.pop();
+    if(!name)throw new NasError('PATH_DENIED');
+    if(!textExtensions.has(path.extname(name).toLowerCase()))throw new NasError('UNSUPPORTED_TEXT_FORMAT');
+    const bytes=Buffer.from(content,'utf8');
+    if(bytes.length>16384)throw new NasError('FILE_TOO_LARGE');
+    if(bytes.toString('utf8')!==content)throw new NasError('INVALID_UTF8');
+    if(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(content))throw new NasError('BINARY_CONTENT');
+    // A portable path-based fallback cannot safely pin a writable parent during a rename race.
+    if(process.platform!=='linux')throw new NasError('CREATE_REQUIRES_LINUX');
+    return this.withHandle(rootId,parts.join('/'),true,async(_parent,ref)=>{
+      const temporary=path.join(ref,`.nas-create-${randomUUID()}.tmp`),target=path.join(ref,name);
+      let staged=false;
+      try {
+        const handle=await open(temporary,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);
+        staged=true;
+        try {await handle.writeFile(bytes);await handle.sync();} finally {await handle.close();}
+        await beforeCommit?.();
+        if(signal?.aborted)throw new NasError('CANCELLED');
+        try {await link(temporary,target);} catch(error) {
+          if((error as NodeJS.ErrnoException).code==='EEXIST')throw new NasError('FILE_EXISTS');
+          throw new NasError('CREATE_FAILED');
+        }
+        try {await _parent.sync();} catch {throw new NasError('WRITE_RESULT_UNKNOWN');}
+        // No cancellation or authorization check after the commit. If durability
+        // or result delivery fails, callers must inspect the path before retrying.
+        return {rootId,path:relative,created:true as const,size:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')};
+      } finally {if(staged)await unlink(temporary).catch(()=>{});}
+    });
+  }
   private segments(relative: string): string[] {
     if (relative.length > 2048 || relative.includes('\\') || relative.includes('\0') || path.posix.isAbsolute(relative))
       throw new NasError('PATH_DENIED');

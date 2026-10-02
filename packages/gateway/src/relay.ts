@@ -1,14 +1,14 @@
 import WebSocket,{WebSocketServer} from 'ws';
 import type { Server } from 'node:http';
 import { randomBytes,randomUUID,verify,createPublicKey } from 'node:crypto';
-import { NAS_READ_SCOPE,type Principal } from '../../auth/src/index.js';
-import { NasError,type ReadOnlyFiles,type ReadOnlyOperation } from '../../core/src/index.js';
+import { NAS_READ_SCOPE,NAS_CREATE_SCOPE,NAS_SHARE_SCOPE,type Principal } from '../../auth/src/index.js';
+import { NasError,type FileOperations,type FileOperation } from '../../core/src/index.js';
 import { RELAY_PROTOCOL,MAX_RELAY_BYTES,agentMessageSchema,relayProofMessage,encodeRelay,validateRelayResult,type RelayRoots,type RelayChallenge } from '../../relay/src/protocol.js';
 import { DevicePairing } from './pairing.js';
 import { GatewayOAuthProvider } from './oauth.js';
 import { GatewayEdgeGuard } from './edge.js';
 
-type Pending={operation:ReadOnlyOperation;rootIds:readonly string[];resolve:(value:unknown)=>void;reject:(error:NasError)=>void;cleanup:()=>void};
+type Pending={operation:FileOperation;rootIds:readonly string[];resolve:(value:unknown)=>void;reject:(error:NasError)=>void;cleanup:()=>void;authorize?:()=>Promise<void>;commitRequested?:boolean;committed?:boolean};
 type Channel={ws:WebSocket;publicKey:string;subject:string;deviceId:string;roots:RelayRoots;pending:Map<string,Pending>;recent:Set<string>};
 export class GatewayRelay {
   private readonly wss=new WebSocketServer({noServer:true,perMessageDeflate:false,maxPayload:MAX_RELAY_BYTES,maxFragments:64,maxBufferedChunks:32});
@@ -70,21 +70,44 @@ export class GatewayRelay {
         }
         if(!this.active(channel))throw new Error('Device revoked');
         if(message.type==='policy'){this.oauth.setDeviceManifest(channel.deviceId,channel.subject,message.roots);channel.roots=message.roots;return;}
+        if(message.type==='commit'){
+          const pending=channel.pending.get(message.id);
+          if(!pending||pending.operation.name==='list_roots'||!['create_file','create_drive_link'].includes(pending.operation.name)||pending.commitRequested)throw new Error('Unexpected commit request');
+          pending.commitRequested=true;
+          const currentChannel=channel;
+          void (async()=>{
+            let allowed=false;
+            try {
+              if(!pending.authorize)throw new Error('Missing commit authorization');
+              await pending.authorize();
+              if(!this.active(currentChannel)||!currentChannel.pending.has(message.id))return;
+              const rootId=pending.operation.name==='list_roots'?'':pending.operation.args.rootId;
+              const root=currentChannel.roots.find(r=>r.id===rootId);
+              allowed=pending.rootIds.includes(rootId)&&!!root&&(pending.operation.name==='create_file'?!!root.allowCreate:!!root.allowShare);
+            } catch { /* Revocation prevents the NAS from committing. */ }
+            if(!currentChannel.pending.has(message.id))return;
+            pending.committed=allowed;
+            try{send({type:'commit',id:message.id,allowed});}catch{ws.terminate();}
+          })();return;
+        }
         if(message.type!=='result'&&message.type!=='error')throw new Error('Unexpected NAS message');
         const pending=channel.pending.get(message.id);
         if(!pending){if(channel.recent.has(message.id))return;throw new Error('Unsolicited NAS response');}
         pending.cleanup();
         if(message.type==='error')pending.reject(new NasError(message.code));
-        else{try{pending.resolve(validateRelayResult(pending.operation,message.value,pending.rootIds));}catch{pending.reject(new NasError('INVALID_RELAY_RESPONSE'));ws.terminate();}}
+        else{try{
+          if(['create_file','create_drive_link'].includes(pending.operation.name)&&!pending.committed)throw new Error('Missing commit approval');
+          pending.resolve(validateRelayResult(pending.operation,message.value,pending.rootIds));
+        }catch{pending.reject(new NasError(['create_file','create_drive_link'].includes(pending.operation.name)?'WRITE_RESULT_UNKNOWN':'INVALID_RELAY_RESPONSE'));ws.terminate();}}
       }catch{ws.terminate();}
     });
     ws.once('close',()=>{
       clearTimeout(timer);clearInterval(heartbeat);release();
       if(channel){if(this.channels.get(channel.deviceId)===channel)this.channels.delete(channel.deviceId);
-        for(const pending of [...channel.pending.values()]){pending.cleanup();pending.reject(new NasError('DEVICE_OFFLINE'));}}
+        for(const pending of [...channel.pending.values()]){pending.cleanup();pending.reject(new NasError((pending.operation.name==='create_file'||pending.operation.name==='create_drive_link')?'WRITE_RESULT_UNKNOWN':'DEVICE_OFFLINE'));}}
     });
   }
-  private call(channel:Channel,operation:ReadOnlyOperation,rootIds:readonly string[],signal?:AbortSignal):Promise<unknown> {
+  private call(channel:Channel,operation:FileOperation,rootIds:readonly string[],signal?:AbortSignal,allowCreate=false,allowShare=false,authorize?:()=>Promise<void>):Promise<unknown> {
     if(!this.active(channel))return Promise.reject(new NasError('DEVICE_OFFLINE'));
     if(signal?.aborted)return Promise.reject(new NasError('CANCELLED'));
     if(this.pendingCount>=32||channel.pending.size>=4)return Promise.reject(new NasError('BUSY'));
@@ -93,20 +116,30 @@ export class GatewayRelay {
       let done=false;
       const cleanup=()=>{if(done)return;done=true;clearTimeout(timer);signal?.removeEventListener('abort',cancel);channel.pending.delete(id);this.pendingCount--;
         channel.recent.add(id);if(channel.recent.size>128)channel.recent.delete(channel.recent.values().next().value!);};
-      const cancel=()=>{cleanup();reject(new NasError('CANCELLED'));try{channel.ws.send(encodeRelay({type:'cancel',id}));}catch{channel.ws.terminate();}};
-      const timer=setTimeout(()=>{cleanup();reject(new NasError('RELAY_TIMEOUT'));try{channel.ws.send(encodeRelay({type:'cancel',id}));}catch{channel.ws.terminate();}},this.timeoutMs);timer.unref();
-      channel.pending.set(id,{operation,rootIds,resolve,reject,cleanup});signal?.addEventListener('abort',cancel,{once:true});
-      try{if(channel.ws.bufferedAmount>MAX_RELAY_BYTES)throw new Error('Backpressure');channel.ws.send(encodeRelay({type:'call',id,rootIds,operation}));}
-      catch{cleanup();reject(new NasError('DEVICE_OFFLINE'));channel.ws.terminate();}
+      const cancel=()=>{cleanup();reject(new NasError((operation.name==='create_file'||operation.name==='create_drive_link')?'WRITE_RESULT_UNKNOWN':'CANCELLED'));try{channel.ws.send(encodeRelay({type:'cancel',id}));}catch{channel.ws.terminate();}};
+      const timer=setTimeout(()=>{cleanup();reject(new NasError((operation.name==='create_file'||operation.name==='create_drive_link')?'WRITE_RESULT_UNKNOWN':'RELAY_TIMEOUT'));try{channel.ws.send(encodeRelay({type:'cancel',id}));}catch{channel.ws.terminate();}},this.timeoutMs);timer.unref();
+      channel.pending.set(id,{operation,rootIds,resolve,reject,cleanup,authorize});signal?.addEventListener('abort',cancel,{once:true});
+      try{if(channel.ws.bufferedAmount>MAX_RELAY_BYTES)throw new Error('Backpressure');channel.ws.send(encodeRelay({type:'call',id,rootIds,operation,...(allowCreate?{allowCreate:true}:{}),...(allowShare?{allowShare:true}:{})}));}
+      catch{cleanup();reject(new NasError((operation.name==='create_file'||operation.name==='create_drive_link')?'WRITE_RESULT_UNKNOWN':'DEVICE_OFFLINE'));channel.ws.terminate();}
     });
   }
-  filesFor(principal:Principal):ReadOnlyFiles {
+  filesFor(principal:Principal):FileOperations {
     if(!principal.scopes.includes(NAS_READ_SCOPE))throw new NasError('SCOPE_DENIED');
     const channel=principal.deviceId?this.channels.get(principal.deviceId):undefined;
     if(!channel||channel.subject!==principal.subject||!this.active(channel)||!principal.rootIds)throw new NasError('DEVICE_OFFLINE');
     const roots=principal.rootIds;
-    const call=<T>(operation:ReadOnlyOperation,signal?:AbortSignal)=>this.call(channel,operation,roots,signal) as Promise<T>;
+    const call=<T>(operation:FileOperation,signal?:AbortSignal,authorize?:()=>Promise<void>)=>this.call(channel,operation,roots,signal,principal.scopes.includes(NAS_CREATE_SCOPE),principal.scopes.includes(NAS_SHARE_SCOPE),authorize) as Promise<T>;
     return {
+      createDriveLink:(rootId,path,signal,beforeCommit)=>{
+        if(!principal.scopes.includes(NAS_SHARE_SCOPE))return Promise.reject(new NasError('SCOPE_DENIED'));
+        if(!roots.includes(rootId)||!channel.roots.some(r=>r.id===rootId&&r.allowShare))return Promise.reject(new NasError('SHARE_DENIED'));
+        return call<Awaited<ReturnType<NonNullable<FileOperations['createDriveLink']>>>>({name:'create_drive_link',args:{rootId,path}},signal,beforeCommit);
+      },
+      createFile:(rootId,path,content,signal,beforeCommit)=>{
+        if(!principal.scopes.includes(NAS_CREATE_SCOPE))return Promise.reject(new NasError('SCOPE_DENIED'));
+        if(!roots.includes(rootId)||!channel.roots.some(r=>r.id===rootId&&r.allowCreate))return Promise.reject(new NasError('CREATE_DENIED'));
+        return call<Awaited<ReturnType<NonNullable<FileOperations['createFile']>>>>({name:'create_file',args:{rootId,path,content}},signal,beforeCommit);
+      },
       listRoots:()=>{if(!this.active(channel))throw new NasError('DEVICE_OFFLINE');return channel.roots.filter(r=>roots.includes(r.id)).map(r=>({...r}));},
       listDirectory:(rootId,path='',limit=100,signal,offset=0)=>call({name:'list_directory',args:{rootId,path,limit,offset}},signal),
       searchFiles:(rootId,query,limit=100,signal)=>call({name:'search_files',args:{rootId,query,limit}},signal),

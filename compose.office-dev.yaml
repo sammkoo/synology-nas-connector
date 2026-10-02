@@ -1,0 +1,20 @@
+# Optional native Spreadsheet proxy. It is not part of the regular connector deployment.
+# Place on a separate trusted host where possible; terminate TLS before connecting the client.
+services:
+  spreadsheet-api:
+    image: synology/spreadsheet-api:3.4.1
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    mem_limit: 512m
+    cpu_shares: 256
+    tmpfs: ["/tmp:size=64m,mode=1777"]
+    ports: ["127.0.0.1:8789:3000"]
+    environment:
+      AUTH_SECRET: ${OFFICE_API_AUTH_SECRET:?Provide a private randomly generated proxy signing secret}
+      WORKER_TIMEOUT: "30000"
+      USER_TIMEOUT: "30000"
+    stop_grace_period: 10s
+    restart: "no"

@@ -10,6 +10,12 @@ if(Object.keys(result.metafile.inputs).some(p=>p.startsWith('packages/gateway/')
   throw new Error('Gateway-only SQLite must never enter the NAS bundle');
 const gateway = await build({entryPoints:['apps/gateway/src/cli.ts'],outfile:'dist/gateway.cjs',bundle:true,
   platform:'node',target:'node22',format:'cjs',legalComments:'eof',metafile:true,external:['bufferutil','utf-8-validate']});
+const office = await build({entryPoints:['apps/office-dev/src/cli.ts'],outfile:'dist/office-dev.cjs',bundle:true,
+  platform:'node',target:'node22',format:'cjs',legalComments:'eof',metafile:true});
+const officeAcceptance = await build({entryPoints:['scripts/office-live-acceptance.ts'],outfile:'dist/office-live-acceptance.cjs',bundle:true,
+  platform:'node',target:'node22',format:'cjs',legalComments:'eof',metafile:true});
+if(Object.keys(result.metafile.inputs).some(p=>p.startsWith('packages/office/')))
+  throw new Error('Experimental Office access must not enter the NAS bundle');
 async function writeNotices(metafile,filename) {
 const used = new Set();
 for (const input of Object.keys(metafile.inputs)) {
@@ -31,5 +37,7 @@ await writeFile(filename, notices.join('\n\n------------------------------------
 }
 await writeNotices(result.metafile,'dist/THIRD_PARTY_NOTICES.txt');
 await writeNotices(gateway.metafile,'dist/GATEWAY_THIRD_PARTY_NOTICES.txt');
+await writeNotices(office.metafile,'dist/OFFICE_THIRD_PARTY_NOTICES.txt');
+await writeNotices(officeAcceptance.metafile,'dist/OFFICE_ACCEPTANCE_THIRD_PARTY_NOTICES.txt');
 await cp('apps/dsm-ui/public', 'dist/ui', {recursive: true});
 console.log('Built portable NAS server, gateway service and DSM UI');

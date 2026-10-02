@@ -37,7 +37,7 @@ export function createHttpApp(config: Config, source: FileProvider, auth: Authen
     app.get('/.well-known/oauth-protected-resource', (_req, res) => res.json(auth.resourceMetadata));
   }
   app.use('/api', authorize);
-  app.get('/api/status', (_req, res) => res.json({version: '0.1.0', mode: auth.mode, readOnly: true,
+  app.get('/api/status', (_req, res) => res.json({version: '0.2.0', mode: auth.mode, readOnly: !current().listRoots().some(r=>r.allowCreate),
     roots: current().listRoots().filter(r => !res.locals.principal.rootIds || res.locals.principal.rootIds.includes(r.id)),
     limits: config.limits, chatgpt: {state: 'not-implemented'}}));
   app.use('/mcp', authorize);
@@ -49,7 +49,7 @@ export function createHttpApp(config: Config, source: FileProvider, auth: Authen
     res.once('close', release);
     res.once('finish', release);
     next();
-  }, express.json({limit: '16kb', strict: true}), async (req, res) => {
+  }, express.json({limit: '128kb', strict: true}), async (req, res) => {
     const server = createMcpServer(current, res.locals.principal);
     const transport = new StreamableHTTPServerTransport({sessionIdGenerator: undefined, enableJsonResponse: true});
     res.once('close', () => {void transport.close(); void server.close();});

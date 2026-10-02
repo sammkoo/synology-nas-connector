@@ -56,7 +56,7 @@ try{
   assert.equal(command(['--healthcheck','--config',configPath],{NODE_EXTRA_CA_CERTS:''}).status,1,'Health must reject an untrusted TLS certificate');
   assert.deepEqual(JSON.parse((await http('/health')).body),{status:'ready',relay:'attached'});
   const catalog=await http('/mcp',{jsonrpc:'2.0',id:1,method:'tools/list'});assert.equal(catalog.status,200);
-  const tools=JSON.parse(catalog.body).result.tools;assert.equal(tools.length,5);for(const tool of tools)assert.deepEqual(tool.securitySchemes,[{type:'oauth2',scopes:['nas:read']}]);
+  const tools=JSON.parse(catalog.body).result.tools;assert.equal(tools.length,7);for(const tool of tools.filter(t=>!t.name.startsWith('create_')))assert.deepEqual(tool.securitySchemes,[{type:'oauth2',scopes:['nas:read']}]);
   const denied=JSON.parse((await http('/mcp',{jsonrpc:'2.0',id:2,method:'tools/call',params:{name:'list_roots'}})).body).result;
   assert.equal(denied.isError,true);assert.ok(denied._meta['mcp/www_authenticate']);
   const metadata=JSON.parse((await http('/.well-known/oauth-protected-resource/mcp')).body);assert.equal(metadata.resource,new URL('mcp',issuer).href);

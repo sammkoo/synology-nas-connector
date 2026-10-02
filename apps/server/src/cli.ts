@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { loadConfig, NasFiles } from '../../../packages/core/src/index.js';
-import { localTokenAuthenticator, NAS_READ_SCOPE } from '../../../packages/auth/src/index.js';
+import { localTokenAuthenticator, NAS_READ_SCOPE,NAS_CREATE_SCOPE,NAS_SHARE_SCOPE } from '../../../packages/auth/src/index.js';
 import { createMcpServer } from './mcp.js';
 import { createHttpApp } from './http.js';
 import { BridgeGuard, ConfigurationStore, readManagementSecret, ShareCatalog,NasConnectionController } from '../../../packages/management/src/index.js';
@@ -16,13 +16,15 @@ async function main() {
   const config = await loadConfig(configPath);
   // Relative token paths are resolved against config, never the process cwd.
   config.http.tokenFile = path.resolve(path.dirname(configPath), config.http.tokenFile);
+  if(config.drive)config.drive.sessionFile=path.resolve(path.dirname(configPath),config.drive.sessionFile);
   const files = await NasFiles.create(config);
   if (args.includes('--stdio')) {
-    const server = createMcpServer(files, {subject: 'local-process', scopes: [NAS_READ_SCOPE]});
+    const server = createMcpServer(files, {subject: 'local-process', scopes: [NAS_READ_SCOPE,...(config.roots.some(r=>r.allowCreate)?[NAS_CREATE_SCOPE]:[]),...(config.roots.some(r=>r.allowShare)&&config.drive?[NAS_SHARE_SCOPE]:[])]});
     await server.connect(new StdioServerTransport());
     for (const signal of ['SIGTERM', 'SIGINT'] as const) process.once(signal, () => {void server.close().then(() => process.exit(0));});
   } else {
-    const auth = await localTokenAuthenticator(config.http.tokenFile);
+    // Per-call folder capabilities remain authoritative, including after DSM policy changes.
+    const auth = await localTokenAuthenticator(config.http.tokenFile,true);
     const uiDir = process.env.NAS_CONNECTOR_UI_DIR ?? path.resolve('apps/dsm-ui/public');
     let source: NasFiles | (() => NasFiles) = files;
     let management;
@@ -37,7 +39,7 @@ async function main() {
       source = () => store.getFiles();
     }
     const app = createHttpApp(config, source, auth, uiDir, management);
-    const listener = app.listen(config.http.port, config.http.host, () => console.error('NAS connector started (read-only)'));
+    const listener = app.listen(config.http.port, config.http.host, () => console.error('NAS connector started'));
     listener.requestTimeout = 15000;
     listener.headersTimeout = 10000;
     listener.on('error', () => {console.error('HTTP_LISTEN_FAILED'); process.exitCode = 1;void connection?.stop();});

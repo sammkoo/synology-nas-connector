@@ -1,6 +1,6 @@
 # Product objective and acceptance evidence
 
-The objective is a fully functional, simple, intuitive and secure open-source Synology NAS Connector for ordinary users, published to the owner's GitHub. The target is the complete product, not merely a local MCP demo. The first data capabilities remain read-only.
+The objective is a fully functional, simple, intuitive and secure open-source Synology NAS Connector for ordinary users, published to the owner's GitHub. The user's benchmark is the Google Drive experience in ChatGPT: one connection for discovery, document reads and edits, creation, organization and sharing. See the [capability acceptance matrix](google-drive-parity.md). Existing installations stay read-only by default; new capabilities require explicit consent.
 
 Repository: https://github.com/sammkoo/synology-nas-connector
 
@@ -31,7 +31,11 @@ No broad completion claim is justified by a green unit suite alone. Hosting and 
 4. Deploy an approved HTTPS gateway, test real ChatGPT linking and NAS reconnection/revocation behavior.
 5. Verify device installation and upgrades, fix product-level failures, ship release artifacts and complete the acceptance audit above.
 
-## Current checkpoint (2026-10-01)
+## Current checkpoint (2026-10-02)
+
+Read-only build 0009 is installed on the test NAS; the actual ChatGPT connection, reads and folder revocation have passed. The v0.2 [PR 1](https://github.com/sammkoo/synology-nas-connector/pull/1) adds optional text creation and Drive links preserving permissions. [Linux/Docker CI](https://github.com/sammkoo/synology-nas-connector/actions/runs/36980927769) passed 114 Linux tests and a reproducible build 0010. Live creation, Drive mapping and new ChatGPT mutation consent remain pending. No broader NAS permissions have been applied. Google Drive parity is still a development target.
+
+## Historical checkpoint (2026-10-01)
 
 Published management, gateway/browser and relay checkpoints passed Linux CI. The operational gateway CLI/Docker target passed [run 36792812906](https://github.com/sammkoo/synology-nas-connector/actions/runs/36792812906) for `c83c463`, including verified TLS, durable private state and container restart. Build 0005 now wires DSM administrator actions to a NAS connection controller: public-only HTTPS destinations, explicit transit consent, comparison confirmation, persistent private identity/device binding, connection status, offline disconnection and signed gateway revocation. Backend tests use real TLS, not household documents. The NAS bundle excludes gateway SQLite. Build 0005 passed [Linux CI 36796866749](https://github.com/sammkoo/synology-nas-connector/actions/runs/36796866749) for `e6860f1`, including 85 tests on Node.js 22/24, reproducible SPK and both Docker runtime paths. The graphical installation guide now matches the shipped DSM setup; preview release downloads provide the tested SPK, checksum and source.
 

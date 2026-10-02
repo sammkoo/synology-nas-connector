@@ -43,7 +43,7 @@ export function requireAdministrator(username: string, groups: string) {
 export function bridgeAction(env: NodeJS.ProcessEnv) {
   const query = new URLSearchParams(env.QUERY_STRING ?? '');
   const action = query.get('action');
-  if ([...query.keys()].length !== 1 || !['bootstrap','roots','preview','pair-begin','pair-status','pair-confirm','pair-cancel','pair-disconnect'].includes(action ?? ''))
+  if ([...query.keys()].length !== 1 || !['bootstrap','roots','creation','drive-connect','sharing','preview','pair-begin','pair-status','pair-confirm','pair-cancel','pair-disconnect'].includes(action ?? ''))
     throw new ManagementError('UNKNOWN_ACTION',404);
   const method = action === 'bootstrap' ? 'GET' : 'POST';
   if (env.REQUEST_METHOD !== method) throw new ManagementError('METHOD_NOT_ALLOWED',405);
@@ -61,7 +61,9 @@ export async function forwardManagement(env: NodeJS.ProcessEnv, body: Buffer, co
   if (body.length > 16384) throw new ManagementError('REQUEST_TOO_LARGE',413);
   if (!env.HTTP_COOKIE || !env.REMOTE_ADDR) throw new ManagementError('DSM_LOGIN_REQUIRED',401);
   // Official DSM authentication executable reads the existing CGI session cookie.
-  // No passwords, cookies or DSM tokens are sent to the Node management service.
+  // Session cookies and DSM tokens stay in this authentication process.
+  // The separate drive-connect action may forward a user-entered dedicated
+  // Drive password through the signed loopback channel; it is never persisted.
   const auth = await authenticate(env,run);
   const user = auth.stdout.trim();
   if (!/^[A-Za-z0-9_.@\\-]{1,128}$/.test(user) || user.startsWith('-')) throw new ManagementError('DSM_LOGIN_REQUIRED',401);

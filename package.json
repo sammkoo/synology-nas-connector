@@ -1,8 +1,8 @@
 {
   "name": "synology-nas-connector",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Read-only Synology NAS MCP connector for ChatGPT and local MCP clients",
+  "description": "Synology NAS MCP connector with explicit read, create and Drive-link permissions",
   "license": "MIT",
   "type": "module",
   "engines": {
@@ -16,7 +16,7 @@
     "build": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test tests/*.test.ts",
-    "check": "npm run typecheck && npm test && npm run build && npm run test:bundle && npm run test:cgi && npm run test:gateway-bundle",
+    "check": "npm run typecheck && npm test && npm run build && npm run test:bundle && npm run test:cgi && npm run test:gateway-bundle && npm run test:office-bundle",
     "test:cgi": "node scripts/smoke-cgi.mjs",
     "test:bundle": "node scripts/smoke-bundle.mjs",
     "dev": "tsx watch apps/server/src/cli.ts",
@@ -25,6 +25,8 @@
     "spk": "python3 scripts/build-spk.py",
     "test:spk": "python3 scripts/test-spk.py",
     "gateway": "tsx apps/gateway/src/cli.ts",
+    "office:dev": "tsx apps/office-dev/src/cli.ts",
+    "test:office-bundle": "node scripts/smoke-office.mjs",
     "test:gateway-bundle": "node scripts/smoke-gateway.mjs"
   },
   "dependencies": {

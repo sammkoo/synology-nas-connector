@@ -94,8 +94,8 @@ with tempfile.TemporaryDirectory() as temporary:
         metadata = gateway_request('/.well-known/oauth-protected-resource/mcp')
         assert metadata['resource'] == 'https://localhost:8788/mcp'
         catalog = gateway_request('/mcp',{'jsonrpc':'2.0','id':1,'method':'tools/list'})
-        assert len(catalog['result']['tools']) == 5
-        assert all(tool['securitySchemes'] == [{'type':'oauth2','scopes':['nas:read']}] for tool in catalog['result']['tools'])
+        assert len(catalog['result']['tools']) == 7
+        assert all(tool['securitySchemes'] == [{'type':'oauth2','scopes':['nas:read']}] for tool in catalog['result']['tools'] if not tool['name'].startswith('create_'))
         denied = gateway_request('/mcp',{'jsonrpc':'2.0','id':2,'method':'tools/call','params':{'name':'list_roots'}})['result']
         assert denied['isError'] and denied['_meta']['mcp/www_authenticate']
         write = subprocess.run(['docker','exec',container,'node','-e',
@@ -184,3 +184,6 @@ try:
 finally:
     if container: subprocess.run(["docker", "rm", "-f", container], check=True, stdout=subprocess.DEVNULL)
     subprocess.run(["docker", "volume", "rm", config_volume, state_volume], check=True, stdout=subprocess.DEVNULL)
+
+# Test the optional vendor proxy on this ephemeral Linux runner, never on the user's NAS.
+print(run('python3', 'scripts/test-office-proxy.py'))

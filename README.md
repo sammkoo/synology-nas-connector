@@ -1,16 +1,20 @@
 # Synology NAS Connector for ChatGPT
 
-Independent, MIT-licensed **v0.1 developer preview**. A read-only MCP server for selected NAS folders, a portable Node.js core, a DSM dashboard, and a reproducible DSM `.spk` builder. Local operation requires no OpenAI API key or DSM password. Optional gateway pairing enables outbound HTTPS/WSS for ChatGPT access; the gateway sees requested data in transit. No telemetry or inference calls are made.
+Independent, MIT-licensed **v0.2 developer preview**. An MCP server for selected NAS folders, a portable Node.js core, a DSM dashboard, an OAuth/WSS gateway, and a reproducible DSM `.spk` builder. Read-only by default. Optional creation of new text files and Synology Drive links requires explicit folder capabilities and fresh OAuth consent. No telemetry or inference calls are made.
 
-**Implemented:** folder listing, filename search, metadata, bounded UTF-8 document reads; MCP stdio and stateless Streamable HTTP; bearer-token development authentication; DSM package lifecycle. Build 0005 includes an authenticated management bridge, graphical share selection, live policy revocation, administrator-confirmed gateway pairing, connection status and signed disconnection, pending real DSM CGI validation.
+**Implemented:** folder listing, filename search, metadata and bounded UTF-8 reads; optional exclusive `create_file` and `create_drive_link`; MCP stdio and stateless Streamable HTTP; authenticated DSM management, gateway pairing and per-device OAuth grants. See [creation and Drive-link setup, limits and acceptance checks](docs/create-and-drive-links.md). Drive links preserve existing permissions and do not enable public access.
 
-**Remaining product gates:** Real DSM installation/authentication, approved public gateway hosting, real ChatGPT linking, Sign in with ChatGPT and public distribution. The NAS UI provides gateway pairing controls; it does not claim an implemented OpenAI identity flow. A `.spk` build is not proof of installation compatibility; real DSM testing remains a release gate.
+**Product target:** a Google Drive-like ChatGPT experience for authorized NAS files. Broader formats, edits, organization, revisions and permission-changing sharing remain missing. The [capability matrix](docs/google-drive-parity.md) distinguishes implemented behavior, verified vendor support and remaining work.
 
-Development now includes [durable gateway OAuth, NAS ownership pairing and browser consent](docs/gateway-auth.md), plus an [outbound WSS relay and protected MCP resource](docs/relay.md). These components and the NAS connection controller are tested together through real local TLS. The gateway browser has first-party sessions, a folder consent screen and disconnection controls. A [native/Docker gateway service](docs/gateway-deployment.md) now supplies private initialization, listener limits and restart-safe state. Public HTTPS hosting, device validation and real ChatGPT linking remain required.
+**Native Office development:** an optional [Synology Spreadsheet client and stdio MCP preview](docs/synology-office.md) supports selected native sheets and bounded cell reads/edits. It is not installed in DSM or exposed through the production gateway. Native text-document and presentation editing are still unverified.
+
+**Release status:** the published build 0009 remains the read-only preview. The new v0.2 build 0010 passed Linux CI and still requires live mutation/Drive acceptance checks before deployment. A successful package build does not prove DSM/Drive compatibility. “Sign in with ChatGPT” identity and public directory acceptance are not implemented.
+
+The [gateway](docs/gateway-deployment.md) and NAS connection controller are exercised together through real local TLS. The gateway stores ownership/grant state but does not persist document contents. Runtime mutations ask the gateway to revalidate consent before the NAS commits. Operators must validate TLS, ACLs, Drive mapping and real client behavior on their own deployment.
 
 ## DSM setup and downloads
 
-Download the `.spk` and matching checksum from the [build 0009 preview](https://github.com/sammkoo/synology-nas-connector/releases/tag/v0.1.0-preview.9), then follow the [graphical installation guide](docs/installation.md). Build 0009 reads complete CGI POST bodies without waiting for stdin to close. It retains the same-origin DSM session protection header and bounded helper-failure classification; the token endpoint is documented for DSM 6 and requires verification on newer DSM. DSM setup uses your existing administrator session, folder selection and comparison-code pairing; no raw JSON or copied bearer token is needed. You need a separately deployed trusted HTTPS gateway for remote ChatGPT access. This preview still requires real-device and real-account validation.
+Download the `.spk` and matching checksum from the [build 0009 preview](https://github.com/sammkoo/synology-nas-connector/releases/tag/v0.1.0-preview.9), then follow the [graphical installation guide](docs/installation.md). The published read-only build 0009 reads complete CGI POST bodies without waiting for stdin to close. It retains the same-origin DSM session protection header and bounded helper-failure classification; the token endpoint is documented for DSM 6 and requires verification on newer DSM. DSM setup uses your existing administrator session, folder selection and comparison-code pairing; no raw JSON or copied bearer token is needed. You need a separately deployed trusted HTTPS gateway for remote ChatGPT access. This preview still requires real-device and real-account validation.
 
 ## Quick start
 
@@ -63,6 +67,8 @@ HTTP clients use `POST /mcp` with `Authorization: Bearer <local-token>` and MCP 
 | `search_files` | `rootId`, filename `query`, `limit` | matching files, partial-coverage indicators |
 | `get_metadata` | `rootId`, relative `path` | type, bytes, modification time |
 | `read_text` | `rootId`, relative `path`, `startLine`, `maxLines` | text, line range, trust marker |
+| `create_file` | `rootId`, relative `path`, UTF-8 `content` | new-file receipt; no overwrite, opt-in only |
+| `create_drive_link` | `rootId`, relative file `path` | Drive URL with existing permissions, opt-in only |
 
 Text support: `.txt`, `.md`, `.csv`, `.tsv`, `.json`, `.xml`, `.yaml`, `.yml`, `.log`, `.rst`, strictly UTF-8. PDF, DOCX, spreadsheets, OCR and archives are outside v0.1. Search matches filenames only and does not index file contents. Default directory scans stop at 5,000 examined entries; tool output is capped at 200 entries. Use `nextOffset` for another directory page. `scanTruncated` means the scan budget stopped discovery; further pages cannot recover unscanned entries. Pagination is not a snapshot if the directory changes. There is no persistent search index.
 
@@ -88,20 +94,20 @@ npm run spk
 npm run test:spk
 ```
 
-Output: `artifacts/SynologyNASConnector-0.1.0-0009-noarch.spk` and its SHA-256 checksum. See [DSM management preview](docs/dsm-management.md) for the setup flow and device-validation limits. Build 0009 completes CGI input at the declared content length instead of requiring EOF; a real bundled-process regression test keeps stdin open. It retains same-origin DSM session protection headers and distinguishes helper rejection from execution failure. Its DSM 6-documented token endpoint requires verification on newer DSM. It bundles the outbound relay and DSM pairing controls, with no gateway SQLite in the NAS bundle. A fresh installation has no outbound connection; only explicit administrator pairing enables it. A previously paired installation resumes its saved connection after restart or upgrade. Upgrade preserves the private identity and connection record. The [installation guide](docs/installation.md) provides graphical DSM setup and separate local diagnostics.
+Output: `artifacts/SynologyNASConnector-0.2.0-0010-noarch.spk` and its SHA-256 checksum. See [DSM management preview](docs/dsm-management.md) for the setup flow and device-validation limits. Build 0009 completes CGI input at the declared content length instead of requiring EOF; a real bundled-process regression test keeps stdin open. It retains same-origin DSM session protection headers and distinguishes helper rejection from execution failure. Its DSM 6-documented token endpoint requires verification on newer DSM. It bundles the outbound relay and DSM pairing controls, with no gateway SQLite in the NAS bundle. A fresh installation has no outbound connection; only explicit administrator pairing enables it. A previously paired installation resumes its saved connection after restart or upgrade. Upgrade preserves the private identity and connection record. The [installation guide](docs/installation.md) provides graphical DSM setup and separate local diagnostics.
 
 ## Project layout
 
 ```text
-packages/core/      filesystem policy, limits, config; no DSM or MCP dependency
-packages/auth/      local-token authentication and future OAuth adapter contract
+packages/core/      filesystem policy, exclusive creation, Drive REST client; no MCP dependency
+packages/auth/      local-token authentication and read/create/share scopes
 packages/management/ signed bridge, share catalog, private config and connection controller
 packages/gateway/   OAuth, signed pairing, browser consent and deployment runtime
 packages/relay/     persistent NAS identity, outbound WSS agent and bounded protocol
 apps/server/        MCP tool definitions, HTTP transport, stdio CLI
 apps/gateway/       gateway initialization, service and verified local health CLI
 apps/dsm-ui/        static dashboard served locally and packaged for DSM
-apps/dsm-bridge/    authenticated DSM CGI bridge; no DSM credentials forwarded
+apps/dsm-bridge/    authenticated DSM CGI bridge; session cookies stay on NAS
 packaging/synology/ INFO, privilege policy, lifecycle scripts and DSM launcher
 scripts/           portable bundle, SPK builder, package and Docker verification
 tests/             policy, authentication and real MCP SDK client tests

@@ -1,12 +1,12 @@
 import express from 'express';
 import { mcpAuthRouter,createOAuthMetadata } from '@modelcontextprotocol/sdk/server/auth/router.js';
-import { NAS_READ_SCOPE } from '../../auth/src/index.js';
+import { NAS_SCOPES } from '../../auth/src/index.js';
 import { GatewayOAuthProvider } from './oauth.js';
 
 /** OAuth protocol endpoints; account login and consent UI must be mounted by the gateway. */
 export function gatewayOAuthRouter(provider:GatewayOAuthProvider) {
   const router=express.Router();
-  const options={provider,issuerUrl:new URL(provider.issuer),resourceServerUrl:new URL(provider.resource),scopesSupported:[NAS_READ_SCOPE]};
+  const options={provider,issuerUrl:new URL(provider.issuer),resourceServerUrl:new URL(provider.resource),scopesSupported:NAS_SCOPES};
   const metadata={...createOAuthMetadata(options),authorization_response_iss_parameter_supported:true,
     token_endpoint_auth_methods_supported:['none'],revocation_endpoint_auth_methods_supported:['none']};
   router.use((req,res,next)=>{

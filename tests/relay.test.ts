@@ -10,13 +10,13 @@ import { generateKeyPairSync,randomBytes,createHash,sign } from 'node:crypto';
 import WebSocket from 'ws';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { NasFiles,configSchema,type ReadOnlyFiles,type ReadOnlyOperation } from '../packages/core/src/index.js';
+import { NasFiles,configSchema,type FileOperations,type FileOperation } from '../packages/core/src/index.js';
 import { NasRelayAgent,RELAY_PROTOCOL,relayProofMessage,loadOrCreateRelayIdentity,type RelayChallenge } from '../packages/relay/src/index.js';
 import { GatewayStore,GatewayOAuthProvider,DevicePairing,createGatewayRuntime,GatewayRelay,GatewayEdgeGuard,pairingApprovalMessage } from '../packages/gateway/src/index.js';
 import type { Principal } from '../packages/auth/src/index.js';
 
 let certificateDir:string,cert:Buffer,tlsKey:Buffer,directory:string,store:GatewayStore,oauth:GatewayOAuthProvider,hub:GatewayRelay,server:Server,issuer:string;
-let files:ReadOnlyFiles,source:ReadOnlyFiles,agents:NasRelayAgent[],rawSockets:WebSocket[],clients:Client[];
+let files:FileOperations,source:FileOperations,agents:NasRelayAgent[],rawSockets:WebSocket[],clients:Client[];
 const nasKey=generateKeyPairSync('ed25519'),pub=nasKey.publicKey.export({type:'spki',format:'der'}).toString('base64url');
 const lookup:LookupFunction=(_host,options,callback)=>{if(options.all)callback(null,[{address:'127.0.0.1',family:4}]);else callback(null,'127.0.0.1',4);};
 const timeout=<T>(promise:Promise<T>,ms=3000)=>new Promise<T>((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Test deadline exceeded')),ms);promise.then(v=>{clearTimeout(timer);resolve(v);},e=>{clearTimeout(timer);reject(e);});});
@@ -50,14 +50,14 @@ async function paired(key=nasKey,label='Demo NAS') {
   if(proof.state!=='confirmation-required')throw new Error('No NAS challenge');
   pairing.approve(start.deviceCode,sign(null,pairingApprovalMessage(proof),key.privateKey).toString('base64url'));return pairing.completeBrowser(browser);
 }
-async function authorized(account:{subject:string;deviceId:string},roots=['docs']) {
+async function authorized(account:{subject:string;deviceId:string},roots=['docs'],scopes=['nas:read']) {
   const client=await oauth.clientsStore.registerClient!({redirect_uris:['https://client.example/callback'],token_endpoint_auth_method:'none'}),verifier=randomBytes(32).toString('base64url');
-  const handle=oauth.beginAuthorization(client,{redirectUri:client.redirect_uris[0]!,state:'test-state',scopes:['nas:read'],resource:new URL(oauth.resource),codeChallenge:createHash('sha256').update(verifier).digest('base64url')});
+  const handle=oauth.beginAuthorization(client,{redirectUri:client.redirect_uris[0]!,state:'test-state',scopes,resource:new URL(oauth.resource),codeChallenge:createHash('sha256').update(verifier).digest('base64url')});
   const callback=new URL(oauth.approveAuthorization(handle,account.subject,account.deviceId,roots));
   const tokens=await oauth.exchangeAuthorizationCode(client,callback.searchParams.get('code')!,verifier,client.redirect_uris[0],new URL(oauth.resource));
   const principal=(await oauth.authenticator().authenticate(tokens.access_token))!;return {tokens,client,principal};
 }
-async function agent(key=nasKey,provider:()=>ReadOnlyFiles=()=>source) {
+async function agent(key=nasKey,provider:()=>FileOperations=()=>source) {
   const a=new NasRelayAgent({issuer,privateKey:key.privateKey,source:provider,trust:{ca:cert,lookup}});agents.push(a);await timeout(a.connect());return a;
 }
 async function tlsFetch(input:string|URL|Request,init?:RequestInit):Promise<Response> {
@@ -80,19 +80,22 @@ function value(result:Awaited<ReturnType<Client['callTool']>>) {
 }
 function delayedFiles() {
   const entered=deferred(),release=deferred();
-  const wrapped:ReadOnlyFiles={listRoots:files.listRoots.bind(files),listDirectory:files.listDirectory.bind(files),searchFiles:files.searchFiles.bind(files),metadata:files.metadata.bind(files),
+  const wrapped:FileOperations={listRoots:files.listRoots.bind(files),listDirectory:files.listDirectory.bind(files),searchFiles:files.searchFiles.bind(files),metadata:files.metadata.bind(files),
     readText:async(...args)=>{const result=await files.readText(...args);entered.resolve();await release.promise;return result;}};
   source=wrapped;return {entered,release};
 }
 test('real TLS NAS proof and official Streamable HTTP client exercise all five read-only tools',async()=>{
   const account=await paired(),granted=await authorized(account);const a=await agent();assert.equal(a.deviceId,account.deviceId);assert.equal(hub.onlineCount,1);
-  const client=await mcp(granted.tokens.access_token),catalog=await client.listTools();assert.equal(catalog.tools.length,5);
-  for(const tool of catalog.tools){assert.equal(tool.annotations?.readOnlyHint,true);assert.deepEqual(tool._meta?.securitySchemes,[{type:'oauth2',scopes:['nas:read']}]);}
+  const client=await mcp(granted.tokens.access_token),catalog=await client.listTools();assert.equal(catalog.tools.length,7);
+  for(const tool of catalog.tools.filter(t=>!t.name.startsWith('create_'))){assert.equal(tool.annotations?.readOnlyHint,true);assert.deepEqual(tool._meta?.securitySchemes,[{type:'oauth2',scopes:['nas:read']}]);}
+  const sharing=catalog.tools.find(t=>t.name==='create_drive_link')!;
+  assert.equal(sharing.annotations?.readOnlyHint,false);assert.equal(sharing.annotations?.idempotentHint,true);
+  assert.deepEqual(sharing._meta?.securitySchemes,[{type:'oauth2',scopes:['nas:read','nas:share']}]);
   // The pinned generic SDK client strips unknown top-level properties. Check
   // the actual wire catalog as well as its backward-compatible _meta field.
   const wire=await tlsFetch(oauth.resource,{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json, text/event-stream'},body:JSON.stringify({jsonrpc:'2.0',id:7,method:'tools/list'})});
-  const rawCatalog=await wire.json() as {result:{tools:{securitySchemes:unknown}[]}};
-  for(const tool of rawCatalog.result.tools)assert.deepEqual(tool.securitySchemes,[{type:'oauth2',scopes:['nas:read']}]);
+  const rawCatalog=await wire.json() as {result:{tools:{name:string;securitySchemes:unknown}[]}};
+  for(const tool of rawCatalog.result.tools.filter(t=>!t.name.startsWith('create_')))assert.deepEqual(tool.securitySchemes,[{type:'oauth2',scopes:['nas:read']}]);
   assert.deepEqual(value(await client.callTool({name:'list_roots'})),[{id:'docs',label:'Documents'}]);
   assert.equal(value(await client.callTool({name:'list_directory',arguments:{rootId:'docs'}})).entries[0].name,'hello.md');
   assert.equal(value(await client.callTool({name:'search_files',arguments:{rootId:'docs',query:'hello'}})).entries[0].path,'hello.md');
@@ -103,9 +106,50 @@ test('real TLS NAS proof and official Streamable HTTP client exercise all five r
   const db=await readFile(path.join(directory,'gateway.sqlite'));assert.equal(db.includes(Buffer.from('Relay fixture document')),false);
 });
 test('anonymous clients can discover OAuth tools but cannot execute them; malformed tokens are rejected',async()=>{
-  const client=await mcp(),catalog=await client.listTools();assert.equal(catalog.tools.length,5);
+  const client=await mcp(),catalog=await client.listTools();assert.equal(catalog.tools.length,7);
   const result=await client.callTool({name:'list_roots'});assert.equal(result.isError,true);assert.match(JSON.stringify(result._meta),/mcp\/www_authenticate/);assert.match(JSON.stringify(result._meta),/invalid_token/);
   const res=await tlsFetch(oauth.resource,{method:'POST',headers:{Authorization:'Bearer forged','Content-Type':'application/json'},body:'{}'});assert.equal(res.status,401);assert.match(res.headers.get('www-authenticate')!,/resource_metadata/);
+});
+test('real Linux NAS creation traverses TLS, OAuth and the commit gate without overwrite',{skip:process.platform!=='linux'},async()=>{
+  files=await NasFiles.create(configSchema.parse({roots:[{id:'docs',label:'Docs',path:path.join(directory,'docs'),allowCreate:true},{id:'private',label:'Private',path:path.join(directory,'private')}],http:{tokenFile:'unused'}}));source=files;
+  const account=await paired();await agent();
+  const read=await authorized(account),readClient=await mcp(read.tokens.access_token);
+  const missing=await readClient.callTool({name:'create_file',arguments:{rootId:'docs',path:'new.txt',content:'created by client'}});
+  assert.equal(missing.isError,true);assert.match(JSON.stringify(missing._meta),/insufficient_scope/);assert.match(JSON.stringify(missing._meta),/nas:create/);
+  const grant=await authorized(account,['docs'],['nas:read','nas:create']),client=await mcp(grant.tokens.access_token);
+  const catalog=await client.listTools(),tool=catalog.tools.find(t=>t.name==='create_file')!;
+  assert.equal(tool.annotations?.readOnlyHint,false);assert.equal(tool.annotations?.destructiveHint,false);assert.equal(tool.annotations?.idempotentHint,false);
+  const result=value(await client.callTool({name:'create_file',arguments:{rootId:'docs',path:'new.txt',content:'created by client'}}));
+  assert.equal(result.created,true);assert.equal(await readFile(path.join(directory,'docs/new.txt'),'utf8'),'created by client');
+  const duplicate=await client.callTool({name:'create_file',arguments:{rootId:'docs',path:'new.txt',content:'changed'}});
+  assert.equal(duplicate.isError,true);assert.match(JSON.stringify(duplicate),/FILE_EXISTS/);
+  assert.equal(await readFile(path.join(directory,'docs/new.txt'),'utf8'),'created by client');
+  const forbidden=await client.callTool({name:'create_file',arguments:{rootId:'private',path:'new.txt',content:'secret'}});assert.equal(forbidden.isError,true);
+  await assert.rejects(readFile(path.join(directory,'private/new.txt')));
+});
+function stagedCreate() {
+  const entered=deferred(),release=deferred(),committed=deferred();
+  source={listRoots:()=>files.listRoots().map(r=>r.id==='docs'?{...r,allowCreate:true}:r),listDirectory:files.listDirectory.bind(files),searchFiles:files.searchFiles.bind(files),metadata:files.metadata.bind(files),readText:files.readText.bind(files),
+    createFile:async(rootId,relative,content,signal,beforeCommit)=>{
+      entered.resolve();await release.promise;await beforeCommit?.();if(signal?.aborted)throw new Error('cancelled');
+      await writeFile(path.join(directory,'docs',relative),content,{flag:'wx'});committed.resolve();
+      return {rootId,path:relative,created:true,size:Buffer.byteLength(content),sha256:createHash('sha256').update(content).digest('hex')};
+    }};
+  return {entered,release,committed};
+}
+test('OAuth revocation while NAS stages a write denies the commit and creates no file',async()=>{
+  const held=stagedCreate(),account=await paired();await agent();
+  const grant=await authorized(account,['docs'],['nas:read','nas:create']),client=await mcp(grant.tokens.access_token);
+  const creating=client.callTool({name:'create_file',arguments:{rootId:'docs',path:'new.txt',content:'never publish'}});await timeout(held.entered.promise);
+  await oauth.revokeToken(grant.client,{token:grant.tokens.access_token});held.release.resolve();
+  const denied=await timeout(creating);assert.equal(denied.isError,true);await assert.rejects(readFile(path.join(directory,'docs/new.txt')));
+});
+test('NAS policy changes while staging cannot pass a previous commit approval',async()=>{
+  const held=stagedCreate(),account=await paired();await agent();
+  const grant=await authorized(account,['docs'],['nas:read','nas:create']),client=await mcp(grant.tokens.access_token);
+  const creating=client.callTool({name:'create_file',arguments:{rootId:'docs',path:'new.txt',content:'never publish'}});await timeout(held.entered.promise);
+  source=files;held.release.resolve();const denied=await timeout(creating);assert.equal(denied.isError,true);
+  await assert.rejects(readFile(path.join(directory,'docs/new.txt')));
 });
 test('two NAS with the same folder alias never cross device/account boundaries',async()=>{
   const first=await paired(),firstAuth=await authorized(first);await agent();

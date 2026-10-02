@@ -1,10 +1,12 @@
 import { z } from 'zod';
 import { readFile } from 'node:fs/promises';
+import { driveConfigSchema } from './drive.js';
 
 export const configSchema = z.object({
   roots: z.array(z.object({
     id: z.string().regex(/^[a-zA-Z0-9_-]{1,40}$/),
-    path: z.string().min(1), label: z.string().min(1).max(100)
+    path: z.string().min(1), label: z.string().min(1).max(100),
+    allowCreate: z.boolean().optional(),allowShare:z.boolean().optional()
   }).strict()).max(20).default([]),
   http: z.object({
     host: z.string().default('127.0.0.1'), port: z.number().int().min(1).max(65535).default(8787),
@@ -21,6 +23,7 @@ export const configSchema = z.object({
     timeoutMs: z.number().int().min(10).max(30000).default(5000)
   }).strict().default({}),
   denyNames: z.array(z.string().min(1)).default([]),
+  drive:driveConfigSchema.optional(),
   management: z.object({secretFile: z.string().min(1)}).strict().optional()
 }).strict().superRefine((c, ctx) => {
   if (new Set(c.roots.map(r => r.id)).size !== c.roots.length)

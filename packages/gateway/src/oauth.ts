@@ -5,12 +5,12 @@ import type { OAuthRegisteredClientsStore } from '@modelcontextprotocol/sdk/serv
 import type { OAuthClientInformationFull,OAuthTokens,OAuthTokenRevocationRequest } from '@modelcontextprotocol/sdk/shared/auth.js';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { InvalidClientMetadataError,InvalidGrantError,InvalidTokenError,InvalidScopeError,InvalidTargetError,InvalidRequestError } from '@modelcontextprotocol/sdk/server/auth/errors.js';
-import { NAS_READ_SCOPE,type Authenticator } from '../../auth/src/index.js';
+import { NAS_READ_SCOPE,NAS_CREATE_SCOPE,NAS_SHARE_SCOPE,NAS_SCOPES,type Authenticator } from '../../auth/src/index.js';
 import { GatewayStore } from './store.js';
 
 const fresh=()=>randomBytes(32).toString('base64url');
 const DAY=86400_000;
-type Device={subject:string;label:string;rootIds:string[];rootLabels?:Record<string,string>;rootVersions:Record<string,number>;revision:number;revoked:boolean};
+type Device={subject:string;label:string;rootIds:string[];rootLabels?:Record<string,string>;rootCreate?:Record<string,true>;rootShare?:Record<string,true>;rootVersions:Record<string,number>;revision:number;revoked:boolean};
 type Pending={issuer:string;clientId:string;redirectUri:string;resource:string;challenge:string;state?:string;scopes:string[]};
 type Grant={issuer:string;subject:string;deviceId:string;rootIds:string[];rootVersions:Record<string,number>;clientId:string;resource:string;scopes:string[];expires:number;revoked:boolean};
 type Code=Pending&{grantId:string};
@@ -45,11 +45,11 @@ export class GatewayOAuthProvider implements OAuthServerProvider {
       client.redirect_uris.some(uri=>!this.options.redirectUris.includes(uri))||
       client.grant_types?.some(type=>!['authorization_code','refresh_token'].includes(type))||
       client.response_types?.some(type=>type!=='code')||
-      (client.scope&&client.scope!==NAS_READ_SCOPE))throw new InvalidClientMetadataError('Only approved public MCP clients and NAS read scope are supported');
+      (client.scope&&!this.validScopes(client.scope.split(' '))))throw new InvalidClientMetadataError('Only approved public MCP clients and supported NAS scopes are allowed');
     this.store.prune();if(this.store.count('client')>=1000)throw new InvalidClientMetadataError('Client registration capacity reached');
     if(client.client_name&&client.client_name.length>100)throw new InvalidClientMetadataError('Client name is too long');
     const record:OAuthClientInformationFull={redirect_uris:client.redirect_uris,...(client.client_name?{client_name:client.client_name}:{}),client_id:randomUUID(),client_id_issued_at:Math.floor(this.store.now()/1000),
-      token_endpoint_auth_method:'none',grant_types:['authorization_code','refresh_token'],response_types:['code'],scope:NAS_READ_SCOPE};
+      token_endpoint_auth_method:'none',grant_types:['authorization_code','refresh_token'],response_types:['code'],scope:NAS_SCOPES.join(' ')};
     // Keep the DCR client stable for the connection lifetime; tokens have their
     // own short expirations. Registration capacity remains explicitly bounded.
     this.store.put('client',record.client_id,record,Number.MAX_SAFE_INTEGER);return record;
@@ -66,26 +66,32 @@ export class GatewayOAuthProvider implements OAuthServerProvider {
     if(this.store.count('device')>=10000)throw new InvalidRequestError('Device capacity reached');
     const id=randomUUID();this.store.put('device',id,{subject,label,rootIds,rootVersions:Object.fromEntries(rootIds.map(id=>[id,1])),revision:1,revoked:false} satisfies Device,this.store.now()+3650*DAY);return id;
   }
+  private validScopes(scopes:string[]){return scopes.length>=1&&scopes.length<=NAS_SCOPES.length&&new Set(scopes).size===scopes.length&&scopes.includes(NAS_READ_SCOPE)&&scopes.every(s=>NAS_SCOPES.includes(s));}
   private validRoots(ids:string[]){return ids.length<=20&&new Set(ids).size===ids.length&&ids.every(id=>/^[a-zA-Z0-9_-]{1,40}$/.test(id));}
   deviceIsActive(deviceId:string,subject:string) {
     const device=this.store.get<Device>('device',deviceId);return Boolean(device&&!device.revoked&&device.subject===subject);
   }
   devicesFor(subject:string) {
     return this.store.list<Device>('device',10000).filter(row=>row.data.subject===subject&&!row.data.revoked)
-      .map(row=>({id:row.id,label:row.data.label,rootIds:[...row.data.rootIds],roots:row.data.rootIds.map(id=>({id,label:row.data.rootLabels&&Object.hasOwn(row.data.rootLabels,id)?row.data.rootLabels[id]!:id}))}));
+      .map(row=>({id:row.id,label:row.data.label,rootIds:[...row.data.rootIds],roots:row.data.rootIds.map(id=>({id,label:row.data.rootLabels&&Object.hasOwn(row.data.rootLabels,id)?row.data.rootLabels[id]!:id,...(row.data.rootCreate&&Object.hasOwn(row.data.rootCreate,id)?{allowCreate:true as const}:{}),...(row.data.rootShare&&Object.hasOwn(row.data.rootShare,id)?{allowShare:true as const}:{})}))}));
   }
-  setDeviceManifest(deviceId:string,subject:string,roots:{id:string;label:string}[]) {
+  setDeviceManifest(deviceId:string,subject:string,roots:{id:string;label:string;allowCreate?:true;allowShare?:true}[]) {
     if(!this.validRoots(roots.map(r=>r.id))||roots.some(r=>!r.label||r.label.length>100))throw new InvalidRequestError('Invalid folder manifest');
+    const previous=this.store.get<Device>('device',deviceId);
     this.setDeviceRoots(deviceId,subject,roots.map(r=>r.id));
     const device=this.store.get<Device>('device',deviceId)!;
-    this.store.put('device',deviceId,{...device,rootLabels:Object.fromEntries(roots.map(r=>[r.id,r.label]))},this.store.now()+3650*DAY);
+    const rootCreate=Object.fromEntries(roots.filter(r=>r.allowCreate).map(r=>[r.id,true as const]));
+    const rootShare=Object.fromEntries(roots.filter(r=>r.allowShare).map(r=>[r.id,true as const]));
+    const rootVersions={...device.rootVersions};
+    for(const r of roots){if(Boolean(previous?.rootCreate&&Object.hasOwn(previous.rootCreate,r.id))!==Boolean(r.allowCreate)||Boolean(previous?.rootShare&&Object.hasOwn(previous.rootShare,r.id))!==Boolean(r.allowShare))rootVersions[r.id]=device.revision;}
+    this.store.put('device',deviceId,{...device,rootVersions,rootCreate,rootShare,rootLabels:Object.fromEntries(roots.map(r=>[r.id,r.label]))},this.store.now()+3650*DAY);
   }
   setDeviceRoots(deviceId:string,subject:string,rootIds:string[]) {
     const device=this.store.get<Device>('device',deviceId);
     if(!device||device.subject!==subject||device.revoked||!this.validRoots(rootIds))throw new InvalidGrantError('Device unavailable');
     const revision=device.revision+1;
     const rootVersions=Object.fromEntries(rootIds.map(id=>[id,Object.hasOwn(device.rootVersions,id)?device.rootVersions[id]:revision]));
-    this.store.put('device',deviceId,{...device,rootIds,rootVersions,revision},this.store.now()+3650*DAY);
+    this.store.put('device',deviceId,{...device,rootIds,rootVersions,revision,rootCreate:Object.fromEntries(rootIds.filter(id=>device.rootCreate&&Object.hasOwn(device.rootCreate,id)).map(id=>[id,true as const])),rootShare:Object.fromEntries(rootIds.filter(id=>device.rootShare&&Object.hasOwn(device.rootShare,id)).map(id=>[id,true as const]))},this.store.now()+3650*DAY);
   }
   revokeDevice(deviceId:string,subject:string) {
     const device=this.store.get<Device>('device',deviceId);
@@ -97,7 +103,7 @@ export class GatewayOAuthProvider implements OAuthServerProvider {
     if(!registered.redirect_uris.includes(params.redirectUri))throw new InvalidRequestError('Unregistered callback');
     if(params.resource?.href!==this.resource)throw new InvalidTargetError('NAS resource must match exactly');
     const scopes=params.scopes?.length?params.scopes:[NAS_READ_SCOPE];
-    if(scopes.length!==1||scopes[0]!==NAS_READ_SCOPE)throw new InvalidScopeError('Only NAS read access is supported');
+    if(!this.validScopes(scopes))throw new InvalidScopeError('Unsupported NAS scopes');
     if(!/^[A-Za-z0-9_-]{43}$/.test(params.codeChallenge)||!params.state||params.state.length>1024)
       throw new InvalidRequestError('S256 PKCE and state are required');
     return {issuer:this.issuer,clientId:client.client_id,redirectUri:params.redirectUri,resource:this.resource,challenge:params.codeChallenge,state:params.state,scopes};
@@ -116,7 +122,7 @@ export class GatewayOAuthProvider implements OAuthServerProvider {
     if(!pending||pending.issuer!==this.issuer||pending.resource!==this.resource)throw new InvalidGrantError('Authorization request expired');
     const client=this.store.get<OAuthClientInformationFull>('client',pending.clientId);
     if(!client)throw new InvalidGrantError('Client expired');
-    return {clientName:client.client_name??'MCP client',scope:NAS_READ_SCOPE,resource:this.resource};
+    return {clientName:client.client_name??'MCP client',scope:pending.scopes.join(' '),scopes:pending.scopes,resource:this.resource};
   }
   /** Gateway route must validate its own account session, origin and CSRF before calling. */
   approveAuthorization(handle:string,subject:string,deviceId:string,rootIds:string[]) {
@@ -124,7 +130,7 @@ export class GatewayOAuthProvider implements OAuthServerProvider {
       const key=this.store.key('pending',handle),request=this.store.get<Pending>('pending',key);
       const device=this.store.get<Device>('device',deviceId);
       if(!request||request.issuer!==this.issuer||request.resource!==this.resource||!device||device.revoked||device.subject!==subject||!this.validRoots(rootIds)||!rootIds.length||
-        rootIds.some(id=>!device.rootIds.includes(id)))throw new InvalidGrantError('Device and selected folders must belong to the signed-in account');
+        rootIds.some(id=>!device.rootIds.includes(id)||(request.scopes.includes(NAS_CREATE_SCOPE)&&!(device.rootCreate&&Object.hasOwn(device.rootCreate,id)))||(request.scopes.includes(NAS_SHARE_SCOPE)&&!(device.rootShare&&Object.hasOwn(device.rootShare,id)))))throw new InvalidGrantError('Device and selected folders must belong to the signed-in account');
       const expires=this.store.now()+this.grantDays*DAY;
       const grantId=randomUUID();
       this.store.put('grant',grantId,{issuer:this.issuer,subject,deviceId,rootIds,rootVersions:Object.fromEntries(rootIds.map(id=>[id,device.rootVersions[id]!])),clientId:request.clientId,resource:request.resource,scopes:request.scopes,expires,revoked:false} satisfies Grant,expires);
@@ -172,16 +178,16 @@ export class GatewayOAuthProvider implements OAuthServerProvider {
     const access=fresh(),refresh=fresh(),expires=Math.min(this.store.now()+this.accessSeconds*1000,grant.expires);
     this.store.put('access',this.store.key('access',access),{grantId,clientId:grant.clientId,resource:grant.resource,expires} satisfies Token,expires);
     this.store.put('refresh',this.store.key('refresh',refresh),{grantId,clientId:grant.clientId,resource:grant.resource,expires:grant.expires,used:false} satisfies Refresh,grant.expires);
-    return {access_token:access,token_type:'Bearer',expires_in:Math.floor((expires-this.store.now())/1000),refresh_token:refresh,scope:NAS_READ_SCOPE};
+    return {access_token:access,token_type:'Bearer',expires_in:Math.floor((expires-this.store.now())/1000),refresh_token:refresh,scope:grant.scopes.join(' ')};
   }
   async exchangeRefreshToken(client:OAuthClientInformationFull,token:string,scopes?:string[],resource?:URL):Promise<OAuthTokens> {
     // Reuse detection must commit revocation even though the request returns an error.
     const result=this.store.transaction(()=>{
       this.requireClient(client);
       const key=this.store.key('refresh',token),record=this.store.get<Refresh>('refresh',key);
-      if(!record||record.clientId!==client.client_id||resource?.href!==record.resource||
-        (scopes&&(scopes.length!==1||scopes[0]!==NAS_READ_SCOPE)))throw new InvalidGrantError('Invalid refresh request');
+      if(!record||record.clientId!==client.client_id||resource?.href!==record.resource)throw new InvalidGrantError('Invalid refresh request');
       const grant=this.requireGrant(record.grantId);
+      if(scopes&&(scopes.length!==grant.scopes.length||new Set(scopes).size!==scopes.length||scopes.some(s=>!grant.scopes.includes(s))))throw new InvalidScopeError('Refresh cannot change the approved scopes');
       if(record.used){this.store.put('grant',record.grantId,{...grant,revoked:true},grant.expires);return null;}
       this.store.put('refresh',key,{...record,used:true},record.expires);
       return this.issueTokens(record.grantId,grant);
@@ -214,8 +220,8 @@ export class GatewayOAuthProvider implements OAuthServerProvider {
   authenticator():Authenticator {
     const resource=new URL(this.resource);
     const metadata=new URL(`/.well-known/oauth-protected-resource${resource.pathname==='/'?'':resource.pathname}`,resource).href;
-    return {mode:'oauth',challenge:`Bearer resource_metadata="${metadata}", scope="${NAS_READ_SCOPE}"`,
-      resourceMetadata:{resource:this.resource,authorization_servers:[this.issuer],scopes_supported:[NAS_READ_SCOPE]},
+    return {mode:'oauth',challenge:`Bearer resource_metadata="${metadata}"`,
+      resourceMetadata:{resource:this.resource,authorization_servers:[this.issuer],scopes_supported:NAS_SCOPES},
       authenticate:async token=>{
         try{const auth=await this.verifyAccessToken(token);return {subject:String(auth.extra!.subject),scopes:auth.scopes,rootIds:auth.extra!.rootIds as string[],deviceId:String(auth.extra!.deviceId)};}
         catch{return null;}
