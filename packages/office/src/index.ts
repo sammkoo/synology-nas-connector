@@ -8,9 +8,13 @@ export class OfficeError extends Error {
 const httpsOrigin=z.string().url().refine(value=>{
   try {const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password&&!url.search&&!url.hash&&url.pathname==='/';}catch{return false;}
 },'A canonical HTTPS origin is required');
+const apiOrigin=z.string().url().refine(value=>{
+  try{const url=new URL(value);return !url.username&&!url.password&&!url.search&&!url.hash&&url.pathname==='/'&&(url.protocol==='https:'||/^http:\/\/127\.0\.0\.1(?::[1-9]\d{0,4})?\/?$/.test(value));}catch{return false;}
+},'HTTPS or explicitly enabled literal IPv4 loopback is required');
 const alias=z.string().regex(/^[A-Za-z0-9_-]{1,40}$/);
 export const officeConfigSchema=z.object({
-  apiOrigin:httpsOrigin,
+  apiOrigin,
+  allowLoopbackHttp:z.boolean().default(false),
   tokenFile:z.string().min(1),
   spreadsheets:z.array(z.object({
     alias,label:z.string().min(1).max(100),
@@ -18,6 +22,7 @@ export const officeConfigSchema=z.object({
     allowEdit:z.boolean().default(false)
   }).strict()).max(20).default([])
 }).strict().superRefine((value,ctx)=>{
+  if(value.apiOrigin.startsWith('http:')&&!value.allowLoopbackHttp)ctx.addIssue({code:'custom',message:'Loopback HTTP must be explicitly enabled'});
   if(new Set(value.spreadsheets.map(s=>s.alias)).size!==value.spreadsheets.length||new Set(value.spreadsheets.map(s=>s.spreadsheetId)).size!==value.spreadsheets.length)
     ctx.addIssue({code:'custom',message:'Spreadsheet bindings must be unique'});
 });
@@ -54,11 +59,11 @@ export class SynologySpreadsheet {
     this.config=parsed.data;
   }
   /** NAS credentials go to this explicitly trusted API proxy; never expose this as an MCP tool. */
-  static async authorize(apiOrigin:string,nasOrigin:string,username:string,password:string):Promise<string>{
-    if(!httpsOrigin.safeParse(apiOrigin).success||!httpsOrigin.safeParse(nasOrigin).success||!username||username.length>128||!password||password.length>1024)
+  static async authorize(origin:string,nasOrigin:string,username:string,password:string,options:{allowLoopbackHttp?:boolean}={}):Promise<string>{
+    if(!officeConfigSchema.safeParse({apiOrigin:origin,allowLoopbackHttp:options.allowLoopbackHttp??false,tokenFile:'unused'}).success||!httpsOrigin.safeParse(nasOrigin).success||!username||username.length>128||!password||password.length>1024)
       throw new OfficeError('OFFICE_LOGIN_FAILED');
     try {
-      const response=await fetch(new URL('/spreadsheets/authorize',apiOrigin),{method:'POST',redirect:'error',signal:AbortSignal.timeout(5000),
+      const response=await fetch(new URL('/spreadsheets/authorize',origin),{method:'POST',redirect:'error',signal:AbortSignal.timeout(5000),
         headers:{Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify({username,password,host:new URL(nasOrigin).host,protocol:'https'})});
       if(!response.ok){await response.body?.cancel();throw new Error();}
       const reader=response.body?.getReader();if(!reader)throw new Error();

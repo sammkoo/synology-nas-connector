@@ -12,7 +12,7 @@ Only private administrator bindings map aliases to immutable native Spreadsheet 
 
 ## Limits and permission behavior
 
-- HTTPS to a separately configured, trusted Office API service; no redirect or certificate bypass.
+- HTTPS to a separately configured, trusted Office API service; no redirect or certificate bypass. Explicit `allowLoopbackHttp: true` permits a same-host proxy at literal `http://127.0.0.1:port` only. HTTP to hostnames, other addresses or the NAS login destination is rejected. This option trusts local processes on that host.
 - Private owner-only token/config files; no password, token or vendor ID in MCP responses.
 - Metadata and up to 1,000 cells from an explicit `Sheet1!A1:B2` rectangle. Read responses must identify that rectangle and fit its bounds. Other vendor range-normalization behavior needs live verification.
 - Scalars and flattened rich text for reading. Styles remain available in Office but are not exposed as editable data by this preview.
@@ -54,7 +54,7 @@ This is a developer stdio process, not a browser setup screen or a ChatGPT conne
 
 The [official proxy image](https://hub.docker.com/r/synology/spreadsheet-api) version 3.4.1 requires Office 3.7.0 or later. The Spreadsheet API runs in a separate proxy, not inside the Office package. Synology discourages running it on the same DSM as Office because spreadsheet workers consume substantial resources. A service placement and resource budget must be agreed before deployment; no service has been installed or exposed by this development change.
 
-`compose.office-dev.yaml` is an optional development recipe with no NAS mounts, a non-root process, a read-only filesystem, loopback-only port and bounded resources. It requires a private signing secret and a separately configured TLS endpoint. The CI smoke test starts the official image on an ephemeral runner and checks that unauthenticated document access is denied. It does not log in to a NAS or prove worker/document compatibility; 512 MiB is a test budget, not a sizing guarantee for real spreadsheets. The vendor image is pulled from its official registry, not bundled in our SPK or redistributed as our MIT code.
+`compose.office-dev.yaml` is an optional development recipe with no NAS mounts, a non-root process, a read-only filesystem, loopback-only port and bounded resources. It requires a private signing secret and either TLS or explicit same-host loopback configuration. The CI smoke test starts the official image on an ephemeral runner and checks that unauthenticated document access is denied. It does not log in to a NAS or prove worker/document compatibility; 512 MiB is a test budget, not a sizing guarantee for real spreadsheets. The vendor image is pulled from its official registry, not bundled in our SPK or redistributed as our MIT code.
 
 Authenticated Drive v1/v2 documentation also provides conversion of existing imported files to Office, with a destination folder and conflict policy. Conversion returns an asynchronous task ID, not a completed document or an openable URL. Completion tracking, destination identity and readback must be verified before a creation tool is exposed. The inspected create-file route accepts file/folder types; it does not establish direct text-document or presentation editing support.
 

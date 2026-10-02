@@ -29,9 +29,9 @@ test('Office bounds explicit A1 rectangles and rejects whole sheets, injection a
   assert.equal(parseCellRange('Sheet1!A1:J100').rows,100);
   for(const value of ['A1','Sheet1!A:A','Sheet1!1:10','Sheet1!A1:J101','Sheet1!B2:A1','Sheet1!A0','Sheet1!XFE1','Sheet1!A100001',"'[External]'!A1",'Sheet1!A1/../../other','Sheet1!A1?target=other'])assert.throws(()=>parseCellRange(value),/OFFICE_RANGE_INVALID/);
 });
-test('Office configuration is HTTPS-only, bindings are unique and editing defaults off',()=>{
+test('Office configuration defaults to HTTPS, bindings are unique and editing defaults off',()=>{
   assert.equal(config.spreadsheets[0]!.allowEdit,false);
-  for(const apiOrigin of ['http://office.example','https://user:pass@office.example','https://office.example/path','https://office.example/?token=private'])assert.throws(()=>new SynologySpreadsheet({...config,apiOrigin}),/OFFICE_CONFIGURATION_INVALID/);
+  for(const apiOrigin of ['not-a-url','http://office.example','https://user:pass@office.example','https://office.example/path','https://office.example/?token=private'])assert.throws(()=>new SynologySpreadsheet({...config,apiOrigin}),/OFFICE_CONFIGURATION_INVALID/);
   assert.equal(officeConfigSchema.safeParse({...config,spreadsheets:[config.spreadsheets[0],config.spreadsheets[0]]}).success,false);
   assert.deepEqual(office.list(),[{alias:'budget',label:'Budget',allowEdit:false}]);
 });
@@ -43,6 +43,14 @@ test('native metadata and cells use documented routes and aliases without return
   assert.equal(calls[0]!.url,`https://office.example/spreadsheets/${id}`);
   assert.equal(calls[1]!.url,`https://office.example/spreadsheets/${id}/values/Sheet1!A1%3AB2`);
   assert.equal(JSON.stringify([description,read]).includes(id),false);assert.equal(JSON.stringify(read).includes(token),false);
+});
+test('plaintext is opt-in for a literal loopback proxy and never allowed on other hosts or for the NAS login',async()=>{
+  assert.throws(()=>new SynologySpreadsheet({...config,apiOrigin:'http://127.0.0.1:8789/'}),/OFFICE_CONFIGURATION_INVALID/);
+  for(const apiOrigin of ['http://localhost:8789/','http://127.0.0.1.evil/','http://10.0.0.1/','http://0.0.0.0/','http://2130706433/','http://127.0.0.1/path'])
+    assert.throws(()=>new SynologySpreadsheet({...config,apiOrigin,allowLoopbackHttp:true}),/OFFICE_CONFIGURATION_INVALID/);
+  const local=new SynologySpreadsheet({...config,apiOrigin:'http://127.0.0.1:8789/',allowLoopbackHttp:true});replies([cells]);
+  await local.readCells('budget',range);assert.equal(new URL(calls[0]!.url).origin,'http://127.0.0.1:8789');
+  await assert.rejects(SynologySpreadsheet.authorize('http://127.0.0.1:8789/','http://nas.example/','test','synthetic',{allowLoopbackHttp:true}),/OFFICE_LOGIN_FAILED/);
 });
 test('unknown documents and default read-only bindings never dispatch edits',async()=>{
   replies([]);
